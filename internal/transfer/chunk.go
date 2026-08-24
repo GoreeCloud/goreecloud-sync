@@ -1,16 +1,19 @@
 package transfer
 
-import "crypto/sha256"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+)
 
 const DefaultChunkSize = 1024 * 1024
 
 type Chunk struct {
-	Index int `json:"index"`
-	Size int `json:"size"`
-	Hash string `json:"hash"`
+	Index int    `json:"index"`
+	Size  int    `json:"size"`
+	Hash  string `json:"hash"`
 }
 
 func Hash(data []byte) string {
 	sum := sha256.Sum256(data)
-	return string(sum[:])
+	return hex.EncodeToString(sum[:])
 }
