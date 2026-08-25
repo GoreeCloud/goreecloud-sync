@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -62,33 +63,17 @@ func ReadJSONFrame(r io.Reader, destination any) error {
 		return fmt.Errorf("read frame payload: %w", err)
 	}
 
-	decoder := json.NewDecoder(bytesReader(payload))
+	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(destination); err != nil {
 		return fmt.Errorf("decode frame: %w", err)
 	}
-	if decoder.More() {
-		return fmt.Errorf("frame contains trailing JSON values")
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("frame contains trailing JSON value")
+		}
+		return fmt.Errorf("decode trailing frame data: %w", err)
 	}
 	return nil
-}
-
-// bytesReader keeps the frame implementation dependency-free while returning
-// an io.Reader over immutable frame bytes.
-func bytesReader(payload []byte) io.Reader {
-	return &byteReader{payload: payload}
-}
-
-type byteReader struct {
-	payload []byte
-	offset  int
-}
-
-func (r *byteReader) Read(p []byte) (int, error) {
-	if r.offset >= len(r.payload) {
-		return 0, io.EOF
-	}
-	n := copy(p, r.payload[r.offset:])
-	r.offset += n
-	return n, nil
 }
