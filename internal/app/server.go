@@ -23,7 +23,7 @@ type Server struct {
 	httpServer   *http.Server
 	logger       *slog.Logger
 	startedAt    time.Time
-	ingestor     *replication.Ingestor
+	ingestor      *replication.Ingestor
 	peerResolver PeerResolver
 }
 
@@ -67,6 +67,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/status", s.handleStatus)
 	if s.ingestor != nil && s.peerResolver != nil {
 		mux.HandleFunc("POST /api/v1/sync/search/history", s.handleSearchHistoryIngest)
+		mux.HandleFunc("POST /api/v1/sync/bookmarks/items", s.handleBookmarkItemIngest)
 	}
 	return securityHeaders(mux)
 }
