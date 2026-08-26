@@ -20,9 +20,9 @@ type ServerOptions struct {
 }
 
 type Server struct {
-	httpServer  *http.Server
-	logger      *slog.Logger
-	startedAt   time.Time
+	httpServer   *http.Server
+	logger       *slog.Logger
+	startedAt    time.Time
 	ingestor     *replication.Ingestor
 	peerResolver PeerResolver
 }
