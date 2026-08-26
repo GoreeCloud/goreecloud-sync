@@ -23,7 +23,7 @@ type Server struct {
 	httpServer   *http.Server
 	logger       *slog.Logger
 	startedAt    time.Time
-	ingestor      *replication.Ingestor
+	ingestor     *replication.Ingestor
 	peerResolver PeerResolver
 }
 
