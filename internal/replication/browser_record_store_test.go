@@ -23,7 +23,7 @@ func TestBrowserTabStorePersistsAuthorizedRecord(t *testing.T) {
 	record, peer, privacy, trust := authorizedInputs()
 	record.Dataset = "browser.tabs"
 	record.RecordID = "tab-1"
-	record.Payload = []byte(`{"url":"https://goreecloud.com","title":"GoreeCloud"}`)
+	record.Payload = map[string]any{"url": "https://goreecloud.com", "title": "GoreeCloud"}
 	if _, err := store.AcceptAndPersist(record, peer, privacy, trust, time.Unix(300, 0).UTC()); err != nil {
 		t.Fatalf("AcceptAndPersist: %v", err)
 	}
@@ -41,7 +41,7 @@ func TestBrowserHistoryStorePersistsAuthorizedRecord(t *testing.T) {
 	record, peer, privacy, trust := authorizedInputs()
 	record.Dataset = "browser.history"
 	record.RecordID = "history-1"
-	record.Payload = []byte(`{"url":"https://goreecloud.com","visitedAt":"2026-08-26T23:00:00Z"}`)
+	record.Payload = map[string]any{"url": "https://goreecloud.com", "visitedAt": "2026-08-26T23:00:00Z"}
 	if _, err := store.AcceptAndPersist(record, peer, privacy, trust, time.Unix(300, 0).UTC()); err != nil {
 		t.Fatalf("AcceptAndPersist: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestBrowserStoresUseDeterministicConflictResolution(t *testing.T) {
 	}
 	older := record
 	older.Revision = 1
-	older.Payload = []byte(`{"url":"https://older.example"}`)
+	older.Payload = map[string]any{"url": "https://older.example"}
 	if _, err := store.AcceptAndPersist(older, peer, privacy, trust, time.Unix(301, 0).UTC()); err != nil {
 		t.Fatal(err)
 	}
