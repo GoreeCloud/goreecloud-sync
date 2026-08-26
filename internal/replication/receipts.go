@@ -17,12 +17,12 @@ var ErrInvalidObservationReceipt = errors.New("invalid peer observation receipt"
 // ObservationReceipt records that an authenticated peer observed a specific
 // record revision. It contains no application payload.
 type ObservationReceipt struct {
-	Dataset         string    `json:"dataset"`
-	RecordID        string    `json:"recordId"`
-	Revision        uint64    `json:"revision"`
-	RecordDigest    string    `json:"recordDigest"`
-	ObserverDevice  string    `json:"observerDevice"`
-	ObservedAt      time.Time `json:"observedAt"`
+	Dataset        string    `json:"dataset"`
+	RecordID       string    `json:"recordId"`
+	Revision       uint64    `json:"revision"`
+	RecordDigest   string    `json:"recordDigest"`
+	ObserverDevice string    `json:"observerDevice"`
+	ObservedAt     time.Time `json:"observedAt"`
 }
 
 func NewObservationReceipt(record datasets.RecordEnvelope, observer session.AuthenticatedPeer, observedAt time.Time) (ObservationReceipt, error) {
