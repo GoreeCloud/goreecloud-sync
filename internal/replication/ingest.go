@@ -18,14 +18,12 @@ var ErrUnsupportedIngestDataset = errors.New("unsupported ingestion dataset")
 type Ingestor struct {
 	Providers policy.DecisionProviders
 	History   *SearchHistoryStore
+	Bookmarks *BookmarkItemStore
 	Receipts  *ReceiptStore
 	Now       func() time.Time
 }
 
 func (i *Ingestor) Ingest(ctx context.Context, peer session.AuthenticatedPeer, record datasets.RecordEnvelope, proof identity.RecordProof) (policy.AcceptanceEvidence, ObservationReceipt, error) {
-	if record.Dataset != "search.history" || i.History == nil {
-		return policy.AcceptanceEvidence{}, ObservationReceipt{}, ErrUnsupportedIngestDataset
-	}
 	if err := i.Providers.Validate(); err != nil {
 		return policy.AcceptanceEvidence{}, ObservationReceipt{}, err
 	}
@@ -46,10 +44,26 @@ func (i *Ingestor) Ingest(ctx context.Context, peer session.AuthenticatedPeer, r
 	if i.Now != nil {
 		now = i.Now().UTC()
 	}
-	evidence, err := i.History.AcceptAndPersist(record, peer, privacy, trust, now)
+
+	var evidence policy.AcceptanceEvidence
+	switch record.Dataset {
+	case "search.history":
+		if i.History == nil {
+			return policy.AcceptanceEvidence{}, ObservationReceipt{}, ErrUnsupportedIngestDataset
+		}
+		evidence, err = i.History.AcceptAndPersist(record, peer, privacy, trust, now)
+	case "bookmarks.items":
+		if i.Bookmarks == nil {
+			return policy.AcceptanceEvidence{}, ObservationReceipt{}, ErrUnsupportedIngestDataset
+		}
+		evidence, err = i.Bookmarks.AcceptAndPersist(record, peer, privacy, trust, now)
+	default:
+		return policy.AcceptanceEvidence{}, ObservationReceipt{}, ErrUnsupportedIngestDataset
+	}
 	if err != nil {
 		return policy.AcceptanceEvidence{}, ObservationReceipt{}, err
 	}
+
 	receipt, err := NewObservationReceipt(record, peer, now)
 	if err != nil {
 		return policy.AcceptanceEvidence{}, ObservationReceipt{}, err
