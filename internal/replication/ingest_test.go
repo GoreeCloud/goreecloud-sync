@@ -54,7 +54,7 @@ func TestIngestRequiresProvidersAndSignedPeerBinding(t *testing.T) {
 
 	ingestor.Providers = policy.DecisionProviders{
 		Privacy: privacyStub{decision: policy.PrivacyDecision{Purpose: "cross-device-search-history", PurposeAllowed: true, ConsentGranted: true, DecidedAt: when, EvidenceID: "privacy-1"}},
-		Trust: trustStub{decision: policy.TrustEvidence{DeviceID: deviceID, KeyFingerprint: peer.KeyFingerprint, Trusted: true, EvaluatedAt: when, EvidenceID: "trust-1"}},
+		Trust:   trustStub{decision: policy.TrustEvidence{DeviceID: deviceID, KeyFingerprint: peer.KeyFingerprint, Trusted: true, EvaluatedAt: when, EvidenceID: "trust-1"}},
 	}
 	ingestor.Now = func() time.Time { return time.Unix(301, 0).UTC() }
 	evidence, receipt, err := ingestor.Ingest(context.Background(), peer, record, proof)
