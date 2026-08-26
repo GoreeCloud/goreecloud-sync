@@ -25,7 +25,7 @@ type PeerResolver interface {
 
 type ingestRequest struct {
 	Record datasets.RecordEnvelope `json:"record"`
-	Proof  identity.RecordProof    `json:"proof"`
+	Proof  identity.RecordProof     `json:"proof"`
 }
 
 type ingestResponse struct {
@@ -35,6 +35,14 @@ type ingestResponse struct {
 }
 
 func (s *Server) handleSearchHistoryIngest(w http.ResponseWriter, r *http.Request) {
+	s.handleDatasetIngest(w, r, "search.history")
+}
+
+func (s *Server) handleBookmarkItemIngest(w http.ResponseWriter, r *http.Request) {
+	s.handleDatasetIngest(w, r, "bookmarks.items")
+}
+
+func (s *Server) handleDatasetIngest(w http.ResponseWriter, r *http.Request, expectedDataset string) {
 	if s.ingestor == nil || s.peerResolver == nil {
 		http.Error(w, "sync ingestion unavailable", http.StatusServiceUnavailable)
 		return
@@ -56,6 +64,10 @@ func (s *Server) handleSearchHistoryIngest(w http.ResponseWriter, r *http.Reques
 	}
 	if err := ensureJSONEOF(decoder); err != nil {
 		http.Error(w, "invalid ingestion request", http.StatusBadRequest)
+		return
+	}
+	if request.Record.Dataset != expectedDataset {
+		http.Error(w, "dataset does not match ingestion route", http.StatusBadRequest)
 		return
 	}
 
