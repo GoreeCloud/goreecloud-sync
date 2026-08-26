@@ -14,7 +14,7 @@ var (
 // merely because they are old. ConvergenceConfirmed must come from the higher
 // replication coordinator after all required peers have observed the deletion.
 type TombstoneCompactionPolicy struct {
-	MinimumRetention    time.Duration
+	MinimumRetention     time.Duration
 	ConvergenceConfirmed bool
 }
 
