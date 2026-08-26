@@ -68,6 +68,8 @@ func (s *Server) routes() http.Handler {
 	if s.ingestor != nil && s.peerResolver != nil {
 		mux.HandleFunc("POST /api/v1/sync/search/history", s.handleSearchHistoryIngest)
 		mux.HandleFunc("POST /api/v1/sync/bookmarks/items", s.handleBookmarkItemIngest)
+		mux.HandleFunc("POST /api/v1/sync/browser/tabs", s.handleBrowserTabIngest)
+		mux.HandleFunc("POST /api/v1/sync/browser/history", s.handleBrowserHistoryIngest)
 	}
 	return securityHeaders(mux)
 }
