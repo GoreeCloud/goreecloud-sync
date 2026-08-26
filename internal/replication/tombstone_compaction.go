@@ -11,16 +11,11 @@ var (
 	ErrReceiptStoreRequired   = errors.New("receipt store is required")
 )
 
-// TombstoneCompactionPolicy prevents deletion markers from being discarded
-// merely because they are old. ConvergenceConfirmed must come from the higher
-// replication coordinator after all required peers have observed the deletion.
 type TombstoneCompactionPolicy struct {
 	MinimumRetention     time.Duration
 	ConvergenceConfirmed bool
 }
 
-// CompactTombstones removes only sufficiently old tombstones after explicit
-// convergence confirmation. Live records are never removed by this operation.
 func (s *SearchHistoryStore) CompactTombstones(now time.Time, policy TombstoneCompactionPolicy) (int, error) {
 	if !policy.ConvergenceConfirmed {
 		return 0, ErrCompactionNotConfirmed
@@ -35,7 +30,6 @@ func (s *SearchHistoryStore) CompactTombstones(now time.Time, policy TombstoneCo
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	records, err := s.load()
 	if err != nil {
 		return 0, err
@@ -56,9 +50,6 @@ func (s *SearchHistoryStore) CompactTombstones(now time.Time, policy TombstoneCo
 	return removed, nil
 }
 
-// CompactTombstonesWithReceipts derives convergence independently for every
-// tombstone from durable peer-observation receipts. One converged record cannot
-// authorize removal of another deletion marker.
 func (s *SearchHistoryStore) CompactTombstonesWithReceipts(now time.Time, minimumRetention time.Duration, requiredPeers []string, receiptStore *ReceiptStore) (int, error) {
 	if minimumRetention <= 0 {
 		return 0, ErrInvalidRetention
@@ -73,7 +64,53 @@ func (s *SearchHistoryStore) CompactTombstonesWithReceipts(now time.Time, minimu
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	records, err := s.load()
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for id, persisted := range records {
+		record := persisted.Envelope
+		if !record.Deleted || record.UpdatedAt.After(cutoff) {
+			continue
+		}
+		receipts, err := receiptStore.ForRecord(record.Dataset, record.RecordID)
+		if err != nil {
+			return 0, err
+		}
+		if !ConvergenceConfirmed(record, requiredPeers, receipts) {
+			continue
+		}
+		delete(records, id)
+		removed++
+	}
+	if removed == 0 {
+		return 0, nil
+	}
+	if err := s.save(records); err != nil {
+		return 0, err
+	}
+	return removed, nil
+}
 
+// CompactTombstonesWithReceipts applies the same exact-revision convergence
+// requirement to bookmarks.items. Bookmark payload is already absent from the
+// tombstone; compaction removes only the deletion marker after every required
+// peer has durably observed it and retention has elapsed.
+func (s *BookmarkItemStore) CompactTombstonesWithReceipts(now time.Time, minimumRetention time.Duration, requiredPeers []string, receiptStore *ReceiptStore) (int, error) {
+	if minimumRetention <= 0 {
+		return 0, ErrInvalidRetention
+	}
+	if receiptStore == nil {
+		return 0, ErrReceiptStoreRequired
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	cutoff := now.UTC().Add(-minimumRetention)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	records, err := s.load()
 	if err != nil {
 		return 0, err
