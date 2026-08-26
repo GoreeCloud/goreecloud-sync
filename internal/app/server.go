@@ -67,9 +67,13 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/status", s.handleStatus)
 	if s.ingestor != nil && s.peerResolver != nil {
 		mux.HandleFunc("POST /api/v1/sync/search/history", s.handleSearchHistoryIngest)
+		mux.HandleFunc("GET /api/v1/sync/search/history", s.handleSearchHistoryRetrieve)
 		mux.HandleFunc("POST /api/v1/sync/bookmarks/items", s.handleBookmarkItemIngest)
+		mux.HandleFunc("GET /api/v1/sync/bookmarks/items", s.handleBookmarkItemRetrieve)
 		mux.HandleFunc("POST /api/v1/sync/browser/tabs", s.handleBrowserTabIngest)
+		mux.HandleFunc("GET /api/v1/sync/browser/tabs", s.handleBrowserTabRetrieve)
 		mux.HandleFunc("POST /api/v1/sync/browser/history", s.handleBrowserHistoryIngest)
+		mux.HandleFunc("GET /api/v1/sync/browser/history", s.handleBrowserHistoryRetrieve)
 	}
 	return securityHeaders(mux)
 }
