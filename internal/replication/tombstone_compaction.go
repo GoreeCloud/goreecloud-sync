@@ -1,0 +1,56 @@
+package replication
+
+import (
+	"errors"
+	"time"
+)
+
+var (
+	ErrCompactionNotConfirmed = errors.New("tombstone convergence is not confirmed")
+	ErrInvalidRetention       = errors.New("tombstone retention must be positive")
+)
+
+// TombstoneCompactionPolicy prevents deletion markers from being discarded
+// merely because they are old. ConvergenceConfirmed must come from the higher
+// replication coordinator after all required peers have observed the deletion.
+type TombstoneCompactionPolicy struct {
+	MinimumRetention    time.Duration
+	ConvergenceConfirmed bool
+}
+
+// CompactTombstones removes only sufficiently old tombstones after explicit
+// convergence confirmation. Live records are never removed by this operation.
+func (s *SearchHistoryStore) CompactTombstones(now time.Time, policy TombstoneCompactionPolicy) (int, error) {
+	if !policy.ConvergenceConfirmed {
+		return 0, ErrCompactionNotConfirmed
+	}
+	if policy.MinimumRetention <= 0 {
+		return 0, ErrInvalidRetention
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	cutoff := now.UTC().Add(-policy.MinimumRetention)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	records, err := s.load()
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for id, record := range records {
+		if record.Envelope.Deleted && !record.Envelope.UpdatedAt.After(cutoff) {
+			delete(records, id)
+			removed++
+		}
+	}
+	if removed == 0 {
+		return 0, nil
+	}
+	if err := s.save(records); err != nil {
+		return 0, err
+	}
+	return removed, nil
+}
