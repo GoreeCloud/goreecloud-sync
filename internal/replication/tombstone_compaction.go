@@ -8,6 +8,7 @@ import (
 var (
 	ErrCompactionNotConfirmed = errors.New("tombstone convergence is not confirmed")
 	ErrInvalidRetention       = errors.New("tombstone retention must be positive")
+	ErrReceiptStoreRequired   = errors.New("receipt store is required")
 )
 
 // TombstoneCompactionPolicy prevents deletion markers from being discarded
@@ -45,6 +46,53 @@ func (s *SearchHistoryStore) CompactTombstones(now time.Time, policy TombstoneCo
 			delete(records, id)
 			removed++
 		}
+	}
+	if removed == 0 {
+		return 0, nil
+	}
+	if err := s.save(records); err != nil {
+		return 0, err
+	}
+	return removed, nil
+}
+
+// CompactTombstonesWithReceipts derives convergence independently for every
+// tombstone from durable peer-observation receipts. One converged record cannot
+// authorize removal of another deletion marker.
+func (s *SearchHistoryStore) CompactTombstonesWithReceipts(now time.Time, minimumRetention time.Duration, requiredPeers []string, receiptStore *ReceiptStore) (int, error) {
+	if minimumRetention <= 0 {
+		return 0, ErrInvalidRetention
+	}
+	if receiptStore == nil {
+		return 0, ErrReceiptStoreRequired
+	}
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	cutoff := now.UTC().Add(-minimumRetention)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	records, err := s.load()
+	if err != nil {
+		return 0, err
+	}
+	removed := 0
+	for id, persisted := range records {
+		record := persisted.Envelope
+		if !record.Deleted || record.UpdatedAt.After(cutoff) {
+			continue
+		}
+		receipts, err := receiptStore.ForRecord(record.Dataset, record.RecordID)
+		if err != nil {
+			return 0, err
+		}
+		if !ConvergenceConfirmed(record, requiredPeers, receipts) {
+			continue
+		}
+		delete(records, id)
+		removed++
 	}
 	if removed == 0 {
 		return 0, nil
