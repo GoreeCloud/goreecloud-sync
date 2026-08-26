@@ -18,6 +18,7 @@ var ErrUnsupportedIngestDataset = errors.New("unsupported ingestion dataset")
 type Ingestor struct {
 	Providers policy.DecisionProviders
 	History   *SearchHistoryStore
+	Receipts  *ReceiptStore
 	Now       func() time.Time
 }
 
@@ -52,6 +53,11 @@ func (i *Ingestor) Ingest(ctx context.Context, peer session.AuthenticatedPeer, r
 	receipt, err := NewObservationReceipt(record, peer, now)
 	if err != nil {
 		return policy.AcceptanceEvidence{}, ObservationReceipt{}, err
+	}
+	if i.Receipts != nil {
+		if err := i.Receipts.Append(receipt); err != nil {
+			return policy.AcceptanceEvidence{}, ObservationReceipt{}, err
+		}
 	}
 	return evidence, receipt, nil
 }
