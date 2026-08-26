@@ -16,12 +16,14 @@ var ErrUnsupportedIngestDataset = errors.New("unsupported ingestion dataset")
 // Ingestor is the trusted boundary between authenticated transport and durable
 // replication. Privacy Shield and Wardveil decisions are obtained internally.
 type Ingestor struct {
-	Providers policy.DecisionProviders
-	History   *SearchHistoryStore
-	Bookmarks *BookmarkItemStore
-	Receipts  *ReceiptStore
-	Replay    *ReplayGuard
-	Now       func() time.Time
+	Providers      policy.DecisionProviders
+	History        *SearchHistoryStore
+	Bookmarks      *BookmarkItemStore
+	BrowserTabs    *BrowserRecordStore
+	BrowserHistory *BrowserRecordStore
+	Receipts       *ReceiptStore
+	Replay         *ReplayGuard
+	Now            func() time.Time
 }
 
 func (i *Ingestor) Ingest(ctx context.Context, peer session.AuthenticatedPeer, record datasets.RecordEnvelope, proof identity.RecordProof) (policy.AcceptanceEvidence, ObservationReceipt, error) {
@@ -61,6 +63,16 @@ func (i *Ingestor) Ingest(ctx context.Context, peer session.AuthenticatedPeer, r
 			return policy.AcceptanceEvidence{}, ObservationReceipt{}, ErrUnsupportedIngestDataset
 		}
 		evidence, err = i.Bookmarks.AcceptAndPersist(record, peer, privacy, trust, now)
+	case "browser.tabs":
+		if i.BrowserTabs == nil {
+			return policy.AcceptanceEvidence{}, ObservationReceipt{}, ErrUnsupportedIngestDataset
+		}
+		evidence, err = i.BrowserTabs.AcceptAndPersist(record, peer, privacy, trust, now)
+	case "browser.history":
+		if i.BrowserHistory == nil {
+			return policy.AcceptanceEvidence{}, ObservationReceipt{}, ErrUnsupportedIngestDataset
+		}
+		evidence, err = i.BrowserHistory.AcceptAndPersist(record, peer, privacy, trust, now)
 	default:
 		return policy.AcceptanceEvidence{}, ObservationReceipt{}, ErrUnsupportedIngestDataset
 	}
