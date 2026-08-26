@@ -10,18 +10,18 @@ import (
 )
 
 var (
-	ErrPurposeDenied      = errors.New("privacy purpose is not authorized")
-	ErrConsentDenied      = errors.New("privacy consent is not authorized")
-	ErrPeerUntrusted      = errors.New("peer trust evidence is insufficient")
+	ErrPurposeDenied       = errors.New("privacy purpose is not authorized")
+	ErrConsentDenied       = errors.New("privacy consent is not authorized")
+	ErrPeerUntrusted       = errors.New("peer trust evidence is insufficient")
 	ErrDatasetUnauthorized = errors.New("dataset is not negotiated for peer")
 )
 
 // PrivacyDecision is the Privacy Shield decision presented to Sync for a
 // single record acceptance attempt. Sync does not infer consent or purpose.
 type PrivacyDecision struct {
-	Purpose       string    `json:"purpose"`
-	PurposeAllowed bool     `json:"purposeAllowed"`
-	ConsentGranted bool     `json:"consentGranted"`
+	Purpose        string    `json:"purpose"`
+	PurposeAllowed bool      `json:"purposeAllowed"`
+	ConsentGranted bool      `json:"consentGranted"`
 	DecidedAt      time.Time `json:"decidedAt"`
 	EvidenceID     string    `json:"evidenceId,omitempty"`
 }
@@ -79,9 +79,12 @@ func AuthorizeRecord(record datasets.RecordEnvelope, peer session.AuthenticatedP
 		now = time.Now().UTC()
 	}
 	return AcceptanceEvidence{
-		Dataset: record.Dataset, RecordID: record.RecordID,
-		PeerDeviceID: peer.DeviceID, PeerFingerprint: peer.KeyFingerprint,
-		PrivacyEvidenceID: privacy.EvidenceID, TrustEvidenceID: trust.EvidenceID,
-		AcceptedAt: now.UTC(),
+		Dataset:           record.Dataset,
+		RecordID:          record.RecordID,
+		PeerDeviceID:      peer.DeviceID,
+		PeerFingerprint:   peer.KeyFingerprint,
+		PrivacyEvidenceID: privacy.EvidenceID,
+		TrustEvidenceID:   trust.EvidenceID,
+		AcceptedAt:        now.UTC(),
 	}, nil
 }
