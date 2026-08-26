@@ -7,12 +7,22 @@ import (
 	"time"
 
 	"github.com/GoreeCloud/goreecloud-sync/internal/datasets"
+	"github.com/GoreeCloud/goreecloud-sync/internal/policy"
+	"github.com/GoreeCloud/goreecloud-sync/internal/session"
 )
+
+func authorizedBrowserInputs(dataset string) (datasets.RecordEnvelope, session.AuthenticatedPeer, policy.PrivacyDecision, policy.TrustEvidence) {
+	record, peer, privacy, trust := authorizedInputs()
+	record.Dataset = dataset
+	peer.NegotiatedDatasets = []datasets.Capability{{
+		Dataset: dataset, Application: "browser", SchemaVersion: 1, Read: true, Write: true, Delete: true,
+	}}
+	return record, peer, privacy, trust
+}
 
 func TestBrowserStoresEnforceDatasetBoundary(t *testing.T) {
 	tabs := NewBrowserTabStore(filepath.Join(t.TempDir(), "tabs.json"))
-	record, peer, privacy, trust := authorizedInputs()
-	record.Dataset = "browser.history"
+	record, peer, privacy, trust := authorizedBrowserInputs("browser.history")
 	if _, err := tabs.AcceptAndPersist(record, peer, privacy, trust, time.Unix(300, 0).UTC()); !errors.Is(err, ErrBrowserDatasetMismatch) {
 		t.Fatalf("error = %v, want %v", err, ErrBrowserDatasetMismatch)
 	}
@@ -20,8 +30,7 @@ func TestBrowserStoresEnforceDatasetBoundary(t *testing.T) {
 
 func TestBrowserTabStorePersistsAuthorizedRecord(t *testing.T) {
 	store := NewBrowserTabStore(filepath.Join(t.TempDir(), "tabs.json"))
-	record, peer, privacy, trust := authorizedInputs()
-	record.Dataset = "browser.tabs"
+	record, peer, privacy, trust := authorizedBrowserInputs("browser.tabs")
 	record.RecordID = "tab-1"
 	record.Payload = map[string]any{"url": "https://goreecloud.com", "title": "GoreeCloud"}
 	if _, err := store.AcceptAndPersist(record, peer, privacy, trust, time.Unix(300, 0).UTC()); err != nil {
@@ -38,8 +47,7 @@ func TestBrowserTabStorePersistsAuthorizedRecord(t *testing.T) {
 
 func TestBrowserHistoryStorePersistsAuthorizedRecord(t *testing.T) {
 	store := NewBrowserHistoryStore(filepath.Join(t.TempDir(), "history.json"))
-	record, peer, privacy, trust := authorizedInputs()
-	record.Dataset = "browser.history"
+	record, peer, privacy, trust := authorizedBrowserInputs("browser.history")
 	record.RecordID = "history-1"
 	record.Payload = map[string]any{"url": "https://goreecloud.com", "visitedAt": "2026-08-26T23:00:00Z"}
 	if _, err := store.AcceptAndPersist(record, peer, privacy, trust, time.Unix(300, 0).UTC()); err != nil {
@@ -56,8 +64,7 @@ func TestBrowserHistoryStorePersistsAuthorizedRecord(t *testing.T) {
 
 func TestBrowserStoresUseDeterministicConflictResolution(t *testing.T) {
 	store := NewBrowserTabStore(filepath.Join(t.TempDir(), "tabs.json"))
-	record, peer, privacy, trust := authorizedInputs()
-	record.Dataset = "browser.tabs"
+	record, peer, privacy, trust := authorizedBrowserInputs("browser.tabs")
 	record.RecordID = "tab-1"
 	record.Revision = 2
 	if _, err := store.AcceptAndPersist(record, peer, privacy, trust, time.Unix(300, 0).UTC()); err != nil {
@@ -77,5 +84,3 @@ func TestBrowserStoresUseDeterministicConflictResolution(t *testing.T) {
 		t.Fatalf("older revision replaced current record: %+v", records)
 	}
 }
-
-var _ = datasets.RecordEnvelope{}
