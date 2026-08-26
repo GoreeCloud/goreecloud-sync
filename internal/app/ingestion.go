@@ -42,6 +42,14 @@ func (s *Server) handleBookmarkItemIngest(w http.ResponseWriter, r *http.Request
 	s.handleDatasetIngest(w, r, "bookmarks.items")
 }
 
+func (s *Server) handleBrowserTabIngest(w http.ResponseWriter, r *http.Request) {
+	s.handleDatasetIngest(w, r, "browser.tabs")
+}
+
+func (s *Server) handleBrowserHistoryIngest(w http.ResponseWriter, r *http.Request) {
+	s.handleDatasetIngest(w, r, "browser.history")
+}
+
 func (s *Server) handleDatasetIngest(w http.ResponseWriter, r *http.Request, expectedDataset string) {
 	if s.ingestor == nil || s.peerResolver == nil {
 		http.Error(w, "sync ingestion unavailable", http.StatusServiceUnavailable)
