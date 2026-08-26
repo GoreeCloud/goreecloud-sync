@@ -25,7 +25,7 @@ type PeerResolver interface {
 
 type ingestRequest struct {
 	Record datasets.RecordEnvelope `json:"record"`
-	Proof  identity.RecordProof     `json:"proof"`
+	Proof  identity.RecordProof    `json:"proof"`
 }
 
 type ingestResponse struct {
