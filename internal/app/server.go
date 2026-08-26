@@ -8,15 +8,23 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/GoreeCloud/goreecloud-sync/internal/replication"
 	"github.com/GoreeCloud/goreecloud-sync/internal/version"
 )
 
 const defaultShutdownTimeout = 10 * time.Second
 
+type ServerOptions struct {
+	Ingestor     *replication.Ingestor
+	PeerResolver PeerResolver
+}
+
 type Server struct {
-	httpServer *http.Server
-	logger     *slog.Logger
-	startedAt  time.Time
+	httpServer  *http.Server
+	logger      *slog.Logger
+	startedAt   time.Time
+	ingestor     *replication.Ingestor
+	peerResolver PeerResolver
 }
 
 type statusResponse struct {
@@ -28,13 +36,19 @@ type statusResponse struct {
 }
 
 func NewServer(addr string, logger *slog.Logger) *Server {
+	return NewServerWithOptions(addr, logger, ServerOptions{})
+}
+
+func NewServerWithOptions(addr string, logger *slog.Logger, options ServerOptions) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
 	s := &Server{
-		logger:    logger,
-		startedAt: time.Now().UTC(),
+		logger:       logger,
+		startedAt:    time.Now().UTC(),
+		ingestor:     options.Ingestor,
+		peerResolver: options.PeerResolver,
 	}
 
 	s.httpServer = &http.Server{
@@ -51,6 +65,9 @@ func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 	mux.HandleFunc("GET /api/v1/status", s.handleStatus)
+	if s.ingestor != nil && s.peerResolver != nil {
+		mux.HandleFunc("POST /api/v1/sync/search/history", s.handleSearchHistoryIngest)
+	}
 	return securityHeaders(mux)
 }
 
