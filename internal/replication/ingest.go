@@ -20,6 +20,7 @@ type Ingestor struct {
 	History   *SearchHistoryStore
 	Bookmarks *BookmarkItemStore
 	Receipts  *ReceiptStore
+	Replay    *ReplayGuard
 	Now       func() time.Time
 }
 
@@ -28,6 +29,9 @@ func (i *Ingestor) Ingest(ctx context.Context, peer session.AuthenticatedPeer, r
 		return policy.AcceptanceEvidence{}, ObservationReceipt{}, err
 	}
 	if err := session.VerifySignedRecord(peer, record, proof); err != nil {
+		return policy.AcceptanceEvidence{}, ObservationReceipt{}, err
+	}
+	if err := i.Replay.Accept(peer, record); err != nil {
 		return policy.AcceptanceEvidence{}, ObservationReceipt{}, err
 	}
 
