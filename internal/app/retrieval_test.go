@@ -84,7 +84,6 @@ func TestDatasetRetrievalRequiresAuthenticatedPeer(t *testing.T) {
 func TestDatasetRetrievalRejectsStoredSchemaOutsideNegotiation(t *testing.T) {
 	historyPath := filepath.Join(t.TempDir(), "history.json")
 	persisted := `{"query-1":{"envelope":{"dataset":"search.history","schemaVersion":2,"recordId":"query-1","revision":1,"updatedAt":"2026-08-28T19:00:00Z","originDevice":"device-1","deleted":false,"payload":{"query":"goreecloud"}}}}`
-	persisted = strings.ReplaceAll(persisted, `\"`, `"`)
 	if err := os.WriteFile(historyPath, []byte(persisted), 0o600); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
