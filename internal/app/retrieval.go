@@ -46,7 +46,8 @@ func (s *Server) handleDatasetRetrieve(w http.ResponseWriter, r *http.Request, d
 		http.Error(w, ErrPeerResolutionFailed.Error(), http.StatusUnauthorized)
 		return
 	}
-	if !peerCanReadDataset(peer, dataset) {
+	readCapability, ok := peerReadCapability(peer, dataset)
+	if !ok {
 		http.Error(w, ErrDatasetReadNotNegotiated.Error(), http.StatusForbidden)
 		return
 	}
@@ -90,16 +91,30 @@ func (s *Server) handleDatasetRetrieve(w http.ResponseWriter, r *http.Request, d
 		records = []datasets.RecordEnvelope{}
 	}
 
+	// Reads are validated again at the storage boundary before serialization.
+	// This prevents stale, corrupted, or manually altered persisted state from
+	// bypassing schema negotiation or Privacy Shield tombstone minimization.
+	validationCapability := readCapability
+	validationCapability.Write = true
+	validationCapability.Delete = true
+	for _, record := range records {
+		if err := datasets.ValidateRecord(record, validationCapability); err != nil {
+			s.logger.Error("sync dataset retrieval record validation failed", "dataset", dataset, "record_id", record.RecordID, "error", err)
+			http.Error(w, ErrDatasetReadUnavailable.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(retrievalResponse{Dataset: dataset, Count: len(records), Records: records})
 }
 
-func peerCanReadDataset(peer session.AuthenticatedPeer, dataset string) bool {
+func peerReadCapability(peer session.AuthenticatedPeer, dataset string) (datasets.Capability, bool) {
 	for _, capability := range peer.NegotiatedDatasets {
 		if capability.Dataset == dataset && capability.Read {
-			return true
+			return capability, true
 		}
 	}
-	return false
+	return datasets.Capability{}, false
 }

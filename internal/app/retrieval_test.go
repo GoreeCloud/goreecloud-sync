@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -77,5 +78,30 @@ func TestDatasetRetrievalRequiresAuthenticatedPeer(t *testing.T) {
 
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusUnauthorized, response.Body.String())
+	}
+}
+
+func TestDatasetRetrievalRejectsStoredSchemaOutsideNegotiation(t *testing.T) {
+	historyPath := filepath.Join(t.TempDir(), "history.json")
+	persisted := "{\"query-1\":{\"envelope\":{\"dataset\":\"search.history\",\"schemaVersion\":2,\"recordId\":\"query-1\",\"revision\":1,\"updatedAt\":\"2026-08-28T19:00:00Z\",\"originDevice\":\"device-1\",\"deleted\":false,\"payload\":{\"query\":\"goreecloud\"}}}}"
+	if err := os.WriteFile(historyPath, []byte(persisted), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	ingestor := &replication.Ingestor{History: replication.NewSearchHistoryStore(historyPath)}
+	resolver := retrievalPeerResolver{peer: session.AuthenticatedPeer{
+		DeviceID: "device-1",
+		NegotiatedDatasets: []datasets.Capability{{
+			Dataset: "search.history", Application: "search", SchemaVersion: 1, Read: true,
+		}},
+	}}
+	server := NewServerWithOptions("127.0.0.1:0", nil, ServerOptions{Ingestor: ingestor, PeerResolver: resolver})
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/sync/search/history", nil)
+	response := httptest.NewRecorder()
+	server.Handler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d; body=%s", response.Code, http.StatusInternalServerError, response.Body.String())
 	}
 }
