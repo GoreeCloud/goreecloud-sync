@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/GoreeCloud/goreecloud-sync/internal/datasets"
@@ -64,6 +65,70 @@ func TestDatasetRetrievalReturnsOnlyNegotiatedDatasetRecords(t *testing.T) {
 	}
 	if body := response.Body.String(); body != "{\"dataset\":\"search.history\",\"count\":0,\"records\":[]}\n" {
 		t.Fatalf("unexpected response: %s", body)
+	}
+}
+
+func TestDatasetRetrievalPaginatesByRecordID(t *testing.T) {
+	historyPath := filepath.Join(t.TempDir(), "history.json")
+	persisted := "{\"query-3\":{\"envelope\":{\"dataset\":\"search.history\",\"schemaVersion\":1,\"recordId\":\"query-3\",\"revision\":1,\"updatedAt\":\"2026-08-28T19:03:00Z\",\"originDevice\":\"device-1\",\"deleted\":false,\"payload\":{\"query\":\"three\"}}},\"query-1\":{\"envelope\":{\"dataset\":\"search.history\",\"schemaVersion\":1,\"recordId\":\"query-1\",\"revision\":1,\"updatedAt\":\"2026-08-28T19:01:00Z\",\"originDevice\":\"device-1\",\"deleted\":false,\"payload\":{\"query\":\"one\"}}},\"query-2\":{\"envelope\":{\"dataset\":\"search.history\",\"schemaVersion\":1,\"recordId\":\"query-2\",\"revision\":1,\"updatedAt\":\"2026-08-28T19:02:00Z\",\"originDevice\":\"device-1\",\"deleted\":false,\"payload\":{\"query\":\"two\"}}}}"
+	if err := os.WriteFile(historyPath, []byte(persisted), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	ingestor := &replication.Ingestor{History: replication.NewSearchHistoryStore(historyPath)}
+	resolver := retrievalPeerResolver{peer: session.AuthenticatedPeer{
+		DeviceID: "device-1",
+		NegotiatedDatasets: []datasets.Capability{{
+			Dataset: "search.history", Application: "search", SchemaVersion: 1, Read: true,
+		}},
+	}}
+	server := NewServerWithOptions("127.0.0.1:0", nil, ServerOptions{Ingestor: ingestor, PeerResolver: resolver})
+
+	firstRequest := httptest.NewRequest(http.MethodGet, "/api/v1/sync/search/history?limit=2", nil)
+	first := httptest.NewRecorder()
+	server.Handler().ServeHTTP(first, firstRequest)
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status = %d; body=%s", first.Code, first.Body.String())
+	}
+	if body := first.Body.String(); !strings.Contains(body, `"count":2`) || !strings.Contains(body, `"nextAfter":"query-2"`) {
+		t.Fatalf("unexpected first page: %s", body)
+	}
+	if strings.Index(first.Body.String(), `"recordId":"query-1"`) > strings.Index(first.Body.String(), `"recordId":"query-2"`) {
+		t.Fatalf("first page is not record-id ordered: %s", first.Body.String())
+	}
+
+	secondRequest := httptest.NewRequest(http.MethodGet, "/api/v1/sync/search/history?limit=2&after=query-2", nil)
+	second := httptest.NewRecorder()
+	server.Handler().ServeHTTP(second, secondRequest)
+	if second.Code != http.StatusOK {
+		t.Fatalf("second status = %d; body=%s", second.Code, second.Body.String())
+	}
+	if body := second.Body.String(); !strings.Contains(body, `"count":1`) || !strings.Contains(body, `"recordId":"query-3"`) || strings.Contains(body, "nextAfter") {
+		t.Fatalf("unexpected second page: %s", body)
+	}
+}
+
+func TestDatasetRetrievalRejectsInvalidPageParameters(t *testing.T) {
+	ingestor := &replication.Ingestor{History: replication.NewSearchHistoryStore(filepath.Join(t.TempDir(), "history.json"))}
+	resolver := retrievalPeerResolver{peer: session.AuthenticatedPeer{
+		DeviceID: "device-1",
+		NegotiatedDatasets: []datasets.Capability{{
+			Dataset: "search.history", Application: "search", SchemaVersion: 1, Read: true,
+		}},
+	}}
+	server := NewServerWithOptions("127.0.0.1:0", nil, ServerOptions{Ingestor: ingestor, PeerResolver: resolver})
+
+	for _, target := range []string{
+		"/api/v1/sync/search/history?limit=0",
+		"/api/v1/sync/search/history?limit=1025",
+		"/api/v1/sync/search/history?after=" + strings.Repeat("x", maxRetrievalCursorLen+1),
+	} {
+		request := httptest.NewRequest(http.MethodGet, target, nil)
+		response := httptest.NewRecorder()
+		server.Handler().ServeHTTP(response, request)
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("%s status = %d, want %d", target, response.Code, http.StatusBadRequest)
+		}
 	}
 }
 
