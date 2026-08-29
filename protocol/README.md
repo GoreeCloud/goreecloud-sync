@@ -100,6 +100,8 @@ Record IDs are currently limited to 512 bytes because they participate in persis
 
 First-party producers and consumers must fail closed unless a record's dataset and schema version exactly match the negotiated application capability. Live records must contain application payload; tombstones must contain none, and clients must not sign, submit, or accept a tombstone that retains deleted application data. Delete permission remains negotiated separately from read/write permission.
 
+A first-party submission client that accepts a `RecordProof` must also fail closed before transport unless the proof device ID equals the record `originDevice`, the public key and signature are valid raw-URL Ed25519 encodings with the required key/signature lengths, and the signature verifies over the exact `GC-SYNC-RECORD/1` message for that record. Client-side proof preflight prevents malformed, mismatched, or post-signing-mutated records from reaching transport; it does not replace server verification against the authenticated peer identity, key fingerprint, replay state, Privacy Shield decision, or Wardveil trust decision.
+
 Current authenticated retrieval is ordered by `recordId` and uses bounded pages. The server default page size is 256 records and the accepted maximum is 1,024. `after` is an exclusive record-ID cursor; `nextAfter` is returned only when another page exists.
 
 ## Transfer manifests and file synchronization
