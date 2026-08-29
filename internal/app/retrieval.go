@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"sort"
 	"strconv"
 
 	"github.com/GoreeCloud/goreecloud-sync/internal/datasets"
@@ -67,32 +66,40 @@ func (s *Server) handleDatasetRetrieve(w http.ResponseWriter, r *http.Request, d
 		return
 	}
 
-	var records []datasets.RecordEnvelope
+	// Retrieval must validate the complete persisted dataset even though only a
+	// bounded page is retained. Corruption outside the visible page therefore
+	// remains fail-closed without materializing every record in memory.
+	validationCapability := readCapability
+	validationCapability.Write = true
+	validationCapability.Delete = true
+
+	var page []datasets.RecordEnvelope
+	var nextAfter string
 	switch dataset {
 	case "search.history":
 		if s.ingestor.History == nil {
 			http.Error(w, ErrDatasetReadUnavailable.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		records, err = s.ingestor.History.Records()
+		page, nextAfter, err = s.ingestor.History.ValidatedPage(validationCapability, after, limit)
 	case "bookmarks.items":
 		if s.ingestor.Bookmarks == nil {
 			http.Error(w, ErrDatasetReadUnavailable.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		records, err = s.ingestor.Bookmarks.Records()
+		page, nextAfter, err = s.ingestor.Bookmarks.ValidatedPage(validationCapability, after, limit)
 	case "browser.tabs":
 		if s.ingestor.BrowserTabs == nil {
 			http.Error(w, ErrDatasetReadUnavailable.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		records, err = s.ingestor.BrowserTabs.Records()
+		page, nextAfter, err = s.ingestor.BrowserTabs.ValidatedPage(validationCapability, after, limit)
 	case "browser.history":
 		if s.ingestor.BrowserHistory == nil {
 			http.Error(w, ErrDatasetReadUnavailable.Error(), http.StatusServiceUnavailable)
 			return
 		}
-		records, err = s.ingestor.BrowserHistory.Records()
+		page, nextAfter, err = s.ingestor.BrowserHistory.ValidatedPage(validationCapability, after, limit)
 	default:
 		http.Error(w, ErrDatasetReadUnavailable.Error(), http.StatusNotFound)
 		return
@@ -102,24 +109,10 @@ func (s *Server) handleDatasetRetrieve(w http.ResponseWriter, r *http.Request, d
 		http.Error(w, ErrDatasetReadUnavailable.Error(), http.StatusInternalServerError)
 		return
 	}
-	if records == nil {
-		records = []datasets.RecordEnvelope{}
+	if page == nil {
+		page = []datasets.RecordEnvelope{}
 	}
 
-	// Validate the complete persisted dataset before slicing a page. Corrupted
-	// state outside the requested page must not be hidden by pagination.
-	validationCapability := readCapability
-	validationCapability.Write = true
-	validationCapability.Delete = true
-	for _, record := range records {
-		if err := datasets.ValidateRecord(record, validationCapability); err != nil {
-			s.logger.Error("sync dataset retrieval record validation failed", "dataset", dataset, "record_id", record.RecordID, "error", err)
-			http.Error(w, ErrDatasetReadUnavailable.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
-	page, nextAfter := paginateRecords(records, after, limit)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(retrievalResponse{
@@ -141,27 +134,6 @@ func retrievalPage(r *http.Request) (int, string, error) {
 		return 0, "", ErrInvalidRetrievalPage
 	}
 	return limit, after, nil
-}
-
-func paginateRecords(records []datasets.RecordEnvelope, after string, limit int) ([]datasets.RecordEnvelope, string) {
-	start := 0
-	if after != "" {
-		start = sort.Search(len(records), func(i int) bool {
-			return records[i].RecordID > after
-		})
-	}
-	if start >= len(records) {
-		return []datasets.RecordEnvelope{}, ""
-	}
-	end := start + limit
-	if end > len(records) {
-		end = len(records)
-	}
-	page := records[start:end]
-	if end == len(records) {
-		return page, ""
-	}
-	return page, page[len(page)-1].RecordID
 }
 
 func peerReadCapability(peer session.AuthenticatedPeer, dataset string) (datasets.Capability, bool) {

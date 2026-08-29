@@ -74,6 +74,12 @@ func (s *BrowserRecordStore) Records() ([]datasets.RecordEnvelope, error) {
 	return out, nil
 }
 
+func (s *BrowserRecordStore) ValidatedPage(capability datasets.Capability, after string, limit int) ([]datasets.RecordEnvelope, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return validatedPersistedPage(s.path, capability, after, limit)
+}
+
 func (s *BrowserRecordStore) load() (map[string]persistedRecord, error) {
 	result := map[string]persistedRecord{}
 	data, err := os.ReadFile(s.path)
