@@ -62,5 +62,5 @@ Usage:
   goreecloud-sync version
   goreecloud-sync help
 
-Milestone 0 provides the service shell only. Sync, Nearby, and Share transfer engines remain planned.`)
+The default CLI service exposes the base development shell. Authenticated first-party Sync ingestion and retrieval foundations exist in source but are not enabled by the default serve command. Nearby, Share, folder synchronization, production deployment, and Stable qualification remain incomplete.`)
 }
