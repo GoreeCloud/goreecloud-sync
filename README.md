@@ -1,66 +1,98 @@
 # GoreeCloud Sync
 
-GoreeCloud Sync is a privacy-first, self-hosted multi-user synchronization and secure-transfer platform for GoreeCloud.
+GoreeCloud Sync is a privacy-first, self-hosted synchronization and secure-transfer platform for GoreeCloud.
 
-The project is designed around three related modes:
+The product is organized around three related modes:
 
-- **Sync** — persistent replication of explicitly approved folders between authorized endpoints.
+- **Sync** — persistent replication of explicitly approved application datasets and, later, approved folders between authorized endpoints.
 - **Nearby** — direct local or private-network transfer of files, folders, text, URLs, and supported payloads.
 - **Share** — temporary end-to-end encrypted delivery, including expiring links and direct peer delivery when available.
 
-The product direction is inspired by the useful capabilities of Syncthing, LocalSend, and wormhole.app while remaining an independently designed GoreeCloud product.
+The product direction is informed by useful capabilities in projects such as Syncthing, LocalSend, and wormhole.app while remaining an independently designed GoreeCloud product.
 
 ## Project status
 
-**Lifecycle:** Development — Milestone 0 foundation.
+**Lifecycle:** Active Development — pre-Stable.
 
-The repository currently contains the initial service and CLI shell, governance documents, architecture records, security boundaries, and CI. Persistent synchronization, discovery, transfer protocols, multi-user persistence, encrypted shares, Android clients, Debian packaging, and production deployment are not yet implemented.
+The repository has advanced beyond its original Milestone 0 shell. Current source foundations include:
 
-No Stable or production-readiness claim should be inferred from the existence of this repository.
+- the Go service and CLI shell with loopback-safe development defaults and bounded shutdown behavior;
+- pre-stabilization `GC-SYNC/1` control framing and TCP peer-transport helpers;
+- Ed25519 device identity and pairing-proof primitives;
+- first-party dataset capability negotiation for GoreeCloud Browser, Search, and Bookmarks;
+- transport-neutral versioned record envelopes, deterministic conflict resolution, and payload-free tombstones;
+- authenticated peer/session boundaries plus Privacy Shield and Wardveil decision interfaces before durable record acceptance;
+- persistent replication stores and ingestion/retrieval handlers for `search.history`, `bookmarks.items`, `browser.tabs`, and `browser.history`;
+- record-bound proof, replay/high-water, observation-receipt, tombstone-convergence, and protected device-key lifecycle foundations;
+- bounded authenticated retrieval with deterministic record-ID cursor pagination.
+
+These are source and development contracts. They do **not** establish a complete production synchronization product. The default development service is not a production deployment, and Sync routes are registered only when the service is constructed with the required replication ingestor and authenticated peer resolver.
+
+No Stable or production-readiness claim should be inferred from repository source, passing CI, or the presence of these foundations.
 
 ## Governing boundaries
 
 GoreeCloud Sync follows several non-negotiable design rules:
 
-- Synchronization is not a backup system.
+- Synchronization is not a backup system; Everkeep remains the platform continuity, preservation, backup, and recovery authority.
 - A synchronized duplicate is not automatically a recoverable backup.
-- Every user, device, folder, and share must be explicitly authorized.
+- Every user, device, dataset, folder, and share must be explicitly authorized for the applicable operation.
 - Network connectivity does not imply application authorization.
+- Application ownership boundaries remain intact: Browser, Search, and Bookmarks own their record semantics while Sync coordinates authorized replication.
+- Privacy Shield purpose/consent decisions and Wardveil trust decisions are server-side acceptance gates rather than client assertions.
+- Deleted application payload must not be retained merely to communicate deletion; synchronized tombstones are payload-free.
 - Live application-managed databases and consistency-sensitive internal state are not ordinary sync targets.
 - Conflicts must fail safely and remain visible rather than being silently discarded.
 - Temporary sharing must be encrypted end to end where that capability is claimed.
 - No advertising, behavioral tracking, or mandatory hosted GoreeCloud account is part of the product model.
-- Production secrets, device private keys, and private transfer contents must not be stored in this repository.
+- Production secrets, bearer sessions, device private keys, and private transfer contents must not be stored in this repository.
 
-## Initial architecture
+## Development service
 
-The first implementation uses Go for the service and CLI foundation. The default HTTP listener binds to `127.0.0.1:8787` to avoid accidental public exposure during development.
+The default HTTP listener binds to `127.0.0.1:8787` to avoid accidental public exposure during development.
 
-Current development endpoints:
+Always-available development endpoints:
 
 - `GET /healthz`
 - `GET /api/v1/status`
 
-Run locally:
+When the server is explicitly constructed with a replication ingestor and authenticated peer resolver, source handlers are available for:
+
+- `POST` and `GET /api/v1/sync/search/history`
+- `POST` and `GET /api/v1/sync/bookmarks/items`
+- `POST` and `GET /api/v1/sync/browser/tabs`
+- `POST` and `GET /api/v1/sync/browser/history`
+
+Authenticated retrieval is record-ID ordered and supports bounded cursor pagination with `limit` and exclusive `after` query parameters. The current server default is 256 records per page, the maximum accepted page size is 1,024 records, and Sync record IDs are bounded to 512 bytes so an accepted record can always be represented by the continuation contract.
+
+Run the current development checks locally:
 
 ```bash
 go test ./...
+go vet ./...
+go build ./cmd/goreecloud-sync
 go run ./cmd/goreecloud-sync serve
 ```
 
-Then inspect:
+Then inspect the base development service:
 
 ```bash
 curl http://127.0.0.1:8787/healthz
 curl http://127.0.0.1:8787/api/v1/status
 ```
 
-## Planned repository areas
+## Still incomplete
+
+Major production and product work remains, including reviewed authenticated encryption for peer sessions, replay/expiry enforcement across the final pairing flow, explicit trusted-device approval and revocation UX, LAN discovery, complete resumable file/folder synchronization, Nearby, Share E2EE, durable multi-user authorization and administration, Glaze UI product surfaces, Android and Debian clients, migration/rollback tooling, monitoring, deployment, and full Glaze UI/Wardveil Security/Privacy Shield/Everkeep acceptance evidence.
+
+Syncthing or any other existing service must not be considered replaced merely because GoreeCloud Sync source foundations exist.
+
+## Repository areas
 
 ```text
 cmd/                    Command-line entry points
 internal/               Private Go implementation packages
-protocol/               Protocol contracts and compatibility records
+protocol/               Pre-stabilization protocol contracts and records
 docs/                   Architecture and engineering documentation
 web/                    Future Glaze UI web administration client
 android/                Future native Android client
