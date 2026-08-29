@@ -96,7 +96,7 @@ The current record envelope contains:
 - deletion/tombstone state;
 - application-owned payload for live records.
 
-Record IDs are currently limited to 512 bytes because they participate in persistence, signatures, deterministic ordering, and exclusive retrieval cursors.
+Record IDs are currently limited to 512 bytes because they participate in persistence, signatures, deterministic ordering, and exclusive retrieval cursors. First-party clients must enforce the same bound before signing or submitting a record and must reject retrieved `recordId`, `after`, or `nextAfter` values beyond that bound before they become continuation or application state.
 
 Tombstones intentionally contain no application payload. Delete permission is negotiated separately from read/write permission.
 
