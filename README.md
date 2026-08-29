@@ -63,7 +63,7 @@ When the server is explicitly constructed with a replication ingestor and authen
 - `POST` and `GET /api/v1/sync/browser/tabs`
 - `POST` and `GET /api/v1/sync/browser/history`
 
-Authenticated retrieval is record-ID ordered and supports bounded cursor pagination with `limit` and exclusive `after` query parameters. The current server default is 256 records per page, the maximum accepted page size is 1,024 records, and Sync record IDs are bounded to 512 bytes so an accepted record can always be represented by the continuation contract.
+Authenticated retrieval is record-ID ordered and supports bounded cursor pagination with `limit` and exclusive `after` query parameters. The current server default is 256 records per page, the maximum accepted page size is 1,024 records, and Sync record IDs are bounded to 512 bytes so an accepted record can always be represented by the continuation contract. Retrieval scans and validates the complete persisted dataset before returning a page so off-page corruption remains fail-closed, while retaining only a page-bounded candidate window instead of materializing every persisted envelope in memory.
 
 Run the current development checks locally:
 
