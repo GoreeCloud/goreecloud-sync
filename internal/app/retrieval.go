@@ -20,7 +20,6 @@ var (
 const (
 	defaultRetrievalLimit = 256
 	maxRetrievalLimit     = 1024
-	maxRetrievalCursorLen = 512
 )
 
 type retrievalResponse struct {
@@ -138,7 +137,7 @@ func retrievalPage(r *http.Request) (int, string, error) {
 		limit = parsed
 	}
 	after := r.URL.Query().Get("after")
-	if len(after) > maxRetrievalCursorLen {
+	if len(after) > datasets.MaxRecordIDBytes {
 		return 0, "", ErrInvalidRetrievalPage
 	}
 	return limit, after, nil
