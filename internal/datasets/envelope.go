@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+const MaxRecordIDBytes = 512
+
 // RecordEnvelope is the transport-neutral unit replicated by GoreeCloud Sync.
 // Payload interpretation remains owned by the first-party application named by
 // the negotiated dataset capability.
@@ -27,6 +29,8 @@ var (
 )
 
 // ValidateRecord checks a record against an already-negotiated capability.
+// Record IDs are bounded because they are persisted, compared for deterministic
+// ordering, signed, and used as exclusive retrieval cursors.
 // Tombstones intentionally carry no payload so deleted application data is not
 // retained merely to communicate deletion.
 func ValidateRecord(record RecordEnvelope, capability Capability) error {
@@ -36,7 +40,7 @@ func ValidateRecord(record RecordEnvelope, capability Capability) error {
 	if record.SchemaVersion < 1 || record.SchemaVersion != capability.SchemaVersion {
 		return ErrSchemaNotNegotiated
 	}
-	if strings.TrimSpace(record.RecordID) == "" || record.Revision == 0 || record.UpdatedAt.IsZero() || strings.TrimSpace(record.OriginDevice) == "" {
+	if strings.TrimSpace(record.RecordID) == "" || len(record.RecordID) > MaxRecordIDBytes || record.Revision == 0 || record.UpdatedAt.IsZero() || strings.TrimSpace(record.OriginDevice) == "" {
 		return ErrInvalidRecord
 	}
 	if record.Deleted {

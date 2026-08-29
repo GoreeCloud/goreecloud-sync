@@ -2,6 +2,7 @@ package datasets
 
 import (
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -19,6 +20,19 @@ func TestValidateRecordRequiresNegotiatedDatasetAndSchema(t *testing.T) {
 	record.SchemaVersion = 2
 	if err := ValidateRecord(record, capability); !errors.Is(err, ErrSchemaNotNegotiated) {
 		t.Fatalf("schema error = %v, want %v", err, ErrSchemaNotNegotiated)
+	}
+}
+
+func TestValidateRecordBoundsRecordIDForCursorSafety(t *testing.T) {
+	capability := Capability{Dataset: "search.history", SchemaVersion: 1, Write: true, Delete: true}
+	record := RecordEnvelope{
+		Dataset: "search.history", SchemaVersion: 1,
+		RecordID: strings.Repeat("r", MaxRecordIDBytes+1), Revision: 1,
+		UpdatedAt: time.Unix(15, 0).UTC(), OriginDevice: "device-a",
+		Payload: map[string]any{"query": "goreecloud"},
+	}
+	if err := ValidateRecord(record, capability); !errors.Is(err, ErrInvalidRecord) {
+		t.Fatalf("record ID bound error = %v, want %v", err, ErrInvalidRecord)
 	}
 }
 
