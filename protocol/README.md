@@ -98,7 +98,7 @@ The current record envelope contains:
 
 Record IDs are currently limited to 512 bytes because they participate in persistence, signatures, deterministic ordering, and exclusive retrieval cursors. First-party clients must enforce the same bound before signing or submitting a record and must reject retrieved `recordId`, `after`, or `nextAfter` values beyond that bound before they become continuation or application state.
 
-Tombstones intentionally contain no application payload. Delete permission is negotiated separately from read/write permission.
+First-party producers and consumers must fail closed unless a record's dataset and schema version exactly match the negotiated application capability. Live records must contain application payload; tombstones must contain none, and clients must not sign, submit, or accept a tombstone that retains deleted application data. Delete permission remains negotiated separately from read/write permission.
 
 Current authenticated retrieval is ordered by `recordId` and uses bounded pages. The server default page size is 256 records and the accepted maximum is 1,024. `after` is an exclusive record-ID cursor; `nextAfter` is returned only when another page exists.
 
