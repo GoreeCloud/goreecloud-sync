@@ -90,11 +90,12 @@ func TestDatasetRetrievalPaginatesByRecordID(t *testing.T) {
 	if first.Code != http.StatusOK {
 		t.Fatalf("first status = %d; body=%s", first.Code, first.Body.String())
 	}
-	if body := first.Body.String(); !strings.Contains(body, `"count":2`) || !strings.Contains(body, `"nextAfter":"query-2"`) {
-		t.Fatalf("unexpected first page: %s", body)
+	firstBody := first.Body.String()
+	if !strings.Contains(firstBody, `"count":2`) || !strings.Contains(firstBody, `"nextAfter":"query-2"`) || !strings.Contains(firstBody, `"recordId":"query-1"`) || !strings.Contains(firstBody, `"recordId":"query-2"`) {
+		t.Fatalf("unexpected first page: %s", firstBody)
 	}
-	if strings.Index(first.Body.String(), `"recordId":"query-1"`) > strings.Index(first.Body.String(), `"recordId":"query-2"`) {
-		t.Fatalf("first page is not record-id ordered: %s", first.Body.String())
+	if strings.Index(firstBody, `"recordId":"query-1"`) > strings.Index(firstBody, `"recordId":"query-2"`) {
+		t.Fatalf("first page is not record-id ordered: %s", firstBody)
 	}
 
 	secondRequest := httptest.NewRequest(http.MethodGet, "/api/v1/sync/search/history?limit=2&after=query-2", nil)
@@ -121,7 +122,7 @@ func TestDatasetRetrievalRejectsInvalidPageParameters(t *testing.T) {
 	for _, target := range []string{
 		"/api/v1/sync/search/history?limit=0",
 		"/api/v1/sync/search/history?limit=1025",
-		"/api/v1/sync/search/history?after=" + strings.Repeat("x", maxRetrievalCursorLen+1),
+		"/api/v1/sync/search/history?after=" + strings.Repeat("x", datasets.MaxRecordIDBytes+1),
 	} {
 		request := httptest.NewRequest(http.MethodGet, target, nil)
 		response := httptest.NewRecorder()
