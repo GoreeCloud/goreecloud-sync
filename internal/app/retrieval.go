@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
+	"strconv"
 
 	"github.com/GoreeCloud/goreecloud-sync/internal/datasets"
 	"github.com/GoreeCloud/goreecloud-sync/internal/session"
@@ -12,12 +14,20 @@ import (
 var (
 	ErrDatasetReadNotNegotiated = errors.New("dataset read capability was not negotiated")
 	ErrDatasetReadUnavailable   = errors.New("sync dataset retrieval unavailable")
+	ErrInvalidRetrievalPage     = errors.New("invalid sync retrieval page")
+)
+
+const (
+	defaultRetrievalLimit = 256
+	maxRetrievalLimit     = 1024
+	maxRetrievalCursorLen = 512
 )
 
 type retrievalResponse struct {
-	Dataset string                    `json:"dataset"`
-	Count   int                       `json:"count"`
-	Records []datasets.RecordEnvelope `json:"records"`
+	Dataset   string                    `json:"dataset"`
+	Count     int                       `json:"count"`
+	Records   []datasets.RecordEnvelope `json:"records"`
+	NextAfter string                    `json:"nextAfter,omitempty"`
 }
 
 func (s *Server) handleSearchHistoryRetrieve(w http.ResponseWriter, r *http.Request) {
@@ -49,6 +59,12 @@ func (s *Server) handleDatasetRetrieve(w http.ResponseWriter, r *http.Request, d
 	readCapability, ok := peerReadCapability(peer, dataset)
 	if !ok {
 		http.Error(w, ErrDatasetReadNotNegotiated.Error(), http.StatusForbidden)
+		return
+	}
+
+	limit, after, err := retrievalPage(r)
+	if err != nil {
+		http.Error(w, ErrInvalidRetrievalPage.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -91,9 +107,8 @@ func (s *Server) handleDatasetRetrieve(w http.ResponseWriter, r *http.Request, d
 		records = []datasets.RecordEnvelope{}
 	}
 
-	// Reads are validated again at the storage boundary before serialization.
-	// This prevents stale, corrupted, or manually altered persisted state from
-	// bypassing schema negotiation or Privacy Shield tombstone minimization.
+	// Validate the complete persisted dataset before slicing a page. Corrupted
+	// state outside the requested page must not be hidden by pagination.
 	validationCapability := readCapability
 	validationCapability.Write = true
 	validationCapability.Delete = true
@@ -105,9 +120,49 @@ func (s *Server) handleDatasetRetrieve(w http.ResponseWriter, r *http.Request, d
 		}
 	}
 
+	page, nextAfter := paginateRecords(records, after, limit)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(retrievalResponse{Dataset: dataset, Count: len(records), Records: records})
+	_ = json.NewEncoder(w).Encode(retrievalResponse{
+		Dataset: dataset, Count: len(page), Records: page, NextAfter: nextAfter,
+	})
+}
+
+func retrievalPage(r *http.Request) (int, string, error) {
+	limit := defaultRetrievalLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed < 1 || parsed > maxRetrievalLimit {
+			return 0, "", ErrInvalidRetrievalPage
+		}
+		limit = parsed
+	}
+	after := r.URL.Query().Get("after")
+	if len(after) > maxRetrievalCursorLen {
+		return 0, "", ErrInvalidRetrievalPage
+	}
+	return limit, after, nil
+}
+
+func paginateRecords(records []datasets.RecordEnvelope, after string, limit int) ([]datasets.RecordEnvelope, string) {
+	start := 0
+	if after != "" {
+		start = sort.Search(len(records), func(i int) bool {
+			return records[i].RecordID > after
+		})
+	}
+	if start >= len(records) {
+		return []datasets.RecordEnvelope{}, ""
+	}
+	end := start + limit
+	if end > len(records) {
+		end = len(records)
+	}
+	page := records[start:end]
+	if end == len(records) {
+		return page, ""
+	}
+	return page, page[len(page)-1].RecordID
 }
 
 func peerReadCapability(peer session.AuthenticatedPeer, dataset string) (datasets.Capability, bool) {
