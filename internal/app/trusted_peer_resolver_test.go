@@ -24,7 +24,7 @@ func (f trustCheckerFunc) IsTrusted(accountID, deviceID, fingerprint string) (bo
 func TestTrustedPeerResolverRequiresExactTrustedDeviceKey(t *testing.T) {
 	peer := session.AuthenticatedPeer{DeviceID: "11111111-1111-1111-1111-111111111111", KeyFingerprint: "fingerprint"}
 	resolver := TrustedPeerResolver{
-		Inner: peerResolverFunc(func(context.Context, *http.Request) (session.AuthenticatedPeer, error) { return peer, nil }),
+		Inner:     peerResolverFunc(func(context.Context, *http.Request) (session.AuthenticatedPeer, error) { return peer, nil }),
 		AccountID: "account-a",
 		Trust: trustCheckerFunc(func(accountID, deviceID, fingerprint string) (bool, error) {
 			return accountID == "account-a" && deviceID == peer.DeviceID && fingerprint == peer.KeyFingerprint, nil
@@ -42,9 +42,9 @@ func TestTrustedPeerResolverRequiresExactTrustedDeviceKey(t *testing.T) {
 func TestTrustedPeerResolverRejectsRevokedOrUntrustedPeer(t *testing.T) {
 	peer := session.AuthenticatedPeer{DeviceID: "11111111-1111-1111-1111-111111111111", KeyFingerprint: "fingerprint"}
 	resolver := TrustedPeerResolver{
-		Inner: peerResolverFunc(func(context.Context, *http.Request) (session.AuthenticatedPeer, error) { return peer, nil }),
+		Inner:     peerResolverFunc(func(context.Context, *http.Request) (session.AuthenticatedPeer, error) { return peer, nil }),
 		AccountID: "account-a",
-		Trust: trustCheckerFunc(func(string, string, string) (bool, error) { return false, nil }),
+		Trust:     trustCheckerFunc(func(string, string, string) (bool, error) { return false, nil }),
 	}
 	if _, err := resolver.ResolvePeer(context.Background(), &http.Request{}); !errors.Is(err, ErrPeerNotTrusted) {
 		t.Fatalf("err=%v", err)
@@ -54,9 +54,9 @@ func TestTrustedPeerResolverRejectsRevokedOrUntrustedPeer(t *testing.T) {
 func TestTrustedPeerResolverFailsClosedOnTrustStoreError(t *testing.T) {
 	peer := session.AuthenticatedPeer{DeviceID: "11111111-1111-1111-1111-111111111111", KeyFingerprint: "fingerprint"}
 	resolver := TrustedPeerResolver{
-		Inner: peerResolverFunc(func(context.Context, *http.Request) (session.AuthenticatedPeer, error) { return peer, nil }),
+		Inner:     peerResolverFunc(func(context.Context, *http.Request) (session.AuthenticatedPeer, error) { return peer, nil }),
 		AccountID: "account-a",
-		Trust: trustCheckerFunc(func(string, string, string) (bool, error) { return false, errors.New("store unavailable") }),
+		Trust:     trustCheckerFunc(func(string, string, string) (bool, error) { return false, errors.New("store unavailable") }),
 	}
 	if _, err := resolver.ResolvePeer(context.Background(), &http.Request{}); !errors.Is(err, ErrPeerResolutionFailed) {
 		t.Fatalf("err=%v", err)
