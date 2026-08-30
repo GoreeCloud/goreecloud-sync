@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	securePeerALPN                = "goreecloud-sync/1"
+	securePeerALPN                 = "goreecloud-sync/1"
 	securePeerCertificateLifetime = 24 * time.Hour
 	securePeerClockSkew            = 5 * time.Minute
 )
