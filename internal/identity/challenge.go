@@ -14,6 +14,19 @@ var (
 	ErrPairingChallengeExpired = errors.New("pairing challenge is expired")
 )
 
+// VerifiedPairing is produced only after a valid pairing proof consumes its
+// exact one-time challenge. Callers can inspect the verified identity but cannot
+// construct a valid value directly outside this package.
+type VerifiedPairing struct {
+	deviceID    string
+	publicKey   string
+	fingerprint string
+}
+
+func (p VerifiedPairing) DeviceID() string    { return p.deviceID }
+func (p VerifiedPairing) PublicKey() string   { return p.publicKey }
+func (p VerifiedPairing) Fingerprint() string { return p.fingerprint }
+
 // ChallengeStore owns short-lived, one-time pairing challenges. It is an
 // in-memory development implementation; durable trusted-device state is separate.
 type ChallengeStore struct {
@@ -42,26 +55,40 @@ func (s *ChallengeStore) Issue() (string, error) {
 	return nonce, nil
 }
 
-// VerifyAndConsume proves key possession and then consumes the exact challenge.
-// A successful challenge cannot be replayed. Expired challenges are deleted.
-func (s *ChallengeStore) VerifyAndConsume(proof PairingProof) (string, error) {
+// VerifyAndConsumePairing proves key possession, consumes the exact one-time
+// challenge, and returns the verified device/key binding for explicit approval.
+func (s *ChallengeStore) VerifyAndConsumePairing(proof PairingProof) (VerifiedPairing, error) {
 	if s == nil {
-		return "", ErrPairingChallengeUnknown
+		return VerifiedPairing{}, ErrPairingChallengeUnknown
 	}
 	fingerprint, err := proof.Verify()
 	if err != nil {
-		return "", err
+		return VerifiedPairing{}, err
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	expiresAt, ok := s.challenges[proof.Nonce]
 	if !ok {
-		return "", ErrPairingChallengeUnknown
+		return VerifiedPairing{}, ErrPairingChallengeUnknown
 	}
 	delete(s.challenges, proof.Nonce)
 	if !s.now().UTC().Before(expiresAt) {
-		return "", ErrPairingChallengeExpired
+		return VerifiedPairing{}, ErrPairingChallengeExpired
 	}
-	return fingerprint, nil
+	return VerifiedPairing{
+		deviceID:    proof.DeviceID,
+		publicKey:   proof.PublicKey,
+		fingerprint: fingerprint,
+	}, nil
+}
+
+// VerifyAndConsume preserves the original fingerprint-only API for callers that
+// do not need to persist an approved trust record.
+func (s *ChallengeStore) VerifyAndConsume(proof PairingProof) (string, error) {
+	verified, err := s.VerifyAndConsumePairing(proof)
+	if err != nil {
+		return "", err
+	}
+	return verified.Fingerprint(), nil
 }
