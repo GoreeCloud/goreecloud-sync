@@ -18,7 +18,10 @@ The repository has advanced beyond its original Milestone 0 shell. Current sourc
 
 - the Go service and CLI shell with loopback-safe development defaults and bounded shutdown behavior;
 - pre-stabilization `GC-SYNC/1` control framing and TCP peer-transport helpers;
-- Ed25519 device identity and pairing-proof primitives;
+- Ed25519 device identity and signed pairing-proof primitives;
+- short-lived one-time pairing challenges with exact consumption, expiry rejection, and replay rejection;
+- durable account-scoped trusted-device authorization with explicit revocation, active-key replacement protection, and stored key/fingerprint validation;
+- fail-closed trusted peer resolution that requires the authenticated device ID and key fingerprint to remain authorized for the configured account;
 - first-party dataset capability negotiation for GoreeCloud Browser, Search, and Bookmarks;
 - transport-neutral versioned record envelopes, deterministic conflict resolution, and payload-free tombstones;
 - authenticated peer/session boundaries plus Privacy Shield and Wardveil decision interfaces before durable record acceptance;
@@ -26,7 +29,7 @@ The repository has advanced beyond its original Milestone 0 shell. Current sourc
 - record-bound proof, replay/high-water, observation-receipt, tombstone-convergence, and protected device-key lifecycle foundations;
 - bounded authenticated retrieval with deterministic record-ID cursor pagination.
 
-These are source and development contracts. They do **not** establish a complete production synchronization product. The default development service is not a production deployment, and Sync routes are registered only when the service is constructed with the required replication ingestor and authenticated peer resolver.
+These are source and development contracts. They do **not** establish a complete production synchronization product. The default development service is not a production deployment, and Sync routes are registered only when the service is constructed with the required replication ingestor and authenticated peer resolver. Durable trusted-device enforcement is a source boundary that must also be wired into the applicable runtime composition; it does not substitute for authenticated encrypted peer-session establishment.
 
 No Stable or production-readiness claim should be inferred from repository source, passing CI, or the presence of these foundations.
 
@@ -83,7 +86,7 @@ curl http://127.0.0.1:8787/api/v1/status
 
 ## Still incomplete
 
-Major production and product work remains, including reviewed authenticated encryption for peer sessions, replay/expiry enforcement across the final pairing flow, explicit trusted-device approval and revocation UX, LAN discovery, complete resumable file/folder synchronization, Nearby, Share E2EE, durable multi-user authorization and administration, Glaze UI product surfaces, Android and Debian clients, migration/rollback tooling, monitoring, deployment, and full Glaze UI/Wardveil Security/Privacy Shield/Everkeep acceptance evidence.
+Major production and product work remains, including reviewed authenticated encryption for peer sessions, transport/session replay protection beyond the implemented one-time pairing challenge, production account/runtime wiring, user-facing pairing approval and revocation UX, LAN discovery, complete resumable file/folder synchronization, Nearby, Share E2EE, complete multi-user authorization and administration, Glaze UI product surfaces, Android and Debian clients, migration/rollback tooling, monitoring, deployment, and full Glaze UI/Wardveil Security/Privacy Shield/Everkeep/GoreeCloud Mesh/GoreeCloud Identity acceptance evidence appropriate to the final scope.
 
 Syncthing or any other existing service must not be considered replaced merely because GoreeCloud Sync source foundations exist.
 
@@ -105,6 +108,7 @@ Directories are added when implementation work reaches them rather than as empty
 
 ## Product documentation
 
+- [Specifications](SPECIFICATIONS.md)
 - [Competitive objectives](COMPETITIVE-OBJECTIVES.md)
 - [Features](FEATURES.md)
 - [Benefits](BENEFITS.md)
