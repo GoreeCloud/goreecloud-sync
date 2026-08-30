@@ -17,7 +17,11 @@ This file distinguishes implemented repository capability from partial developme
 
 - Pre-stabilization `GC-SYNC/1` capability handshakes.
 - Bounded length-prefixed control framing with a 1 MiB hard limit and fail-closed malformed/truncated/unknown-field/trailing-value handling.
-- Context-bound TCP peer transport helpers.
+- Context-bound raw TCP peer transport helpers that do not imply authentication.
+- TLS 1.3-only mutually authenticated secure-peer dial/accept wrappers for already-trusted devices.
+- Short-lived self-signed Ed25519 certificates used only as TLS key-possession carriers; trust is based on exact expected device ID and raw Ed25519 public-key pinning rather than Web PKI or network location.
+- GoreeCloud Sync ALPN binding, bounded TLS handshake time, and TLS session-ticket disabling for the secure-peer wrapper.
+- GC-SYNC capability-handshake local and remote device-ID binding to the TLS-authenticated identities.
 - Ed25519 device-key and fingerprint primitives.
 - Signed pairing proofs bound to device identity and challenge.
 - Cryptographically random, short-lived one-time pairing challenges.
@@ -53,9 +57,10 @@ This file distinguishes implemented repository capability from partial developme
 
 ## Partial or development-only features
 
-- The default `serve` command exposes the base development service and does not by itself wire the complete replication, account, and trusted-device runtime composition.
+- The default `serve` command exposes the base development service and does not by itself wire the complete replication, account, trusted-device, or secure-peer runtime composition.
 - Pairing, one-time challenge consumption, trusted-device authorization, revocation, and trusted-peer enforcement exist as source foundations but do not yet provide complete user-facing pairing/trust administration.
-- TCP peer transport exists, but authenticated encrypted peer-session establishment is not yet a completed product boundary.
+- The TLS 1.3 secure-peer wrapper requires higher-level code to supply the already-authorized expected device ID and raw Ed25519 public key; production trusted-device lookup, secure listener/dial orchestration, connection admission, and lifecycle wiring remain incomplete.
+- Raw TCP peer helpers remain intentionally unauthenticated lower-level primitives and must not be represented as secure sessions.
 - Account-scoped trusted-device state is durable locally, but production multi-user identity/account authority and runtime wiring remain incomplete.
 - First-party application-record replication handlers exist, but they are not a complete folder synchronization engine and are not a production deployment claim.
 - Privacy Shield and Wardveil decision boundaries exist in source, but complete production platform integration and acceptance evidence remain pending.
@@ -120,5 +125,5 @@ This file distinguishes implemented repository capability from partial developme
 - Glaze UI web administration and accessibility acceptance.
 - Native Android client and Debian packaging.
 - GoreeCloud Mesh coordination, GoreeCloud Network reachability, Notify, Manager, Photos, Drive, Search, API, Wardveil Security, Privacy Shield, Everkeep, and broader GoreeCloud Identity integrations as applicable.
-- Reviewed authenticated encryption for peer sessions and transport/session replay protection beyond the implemented one-time pairing challenge.
+- Production orchestration of TLS-authenticated peer sessions with account/trusted-device lookup plus broader transport/session replay and freshness policy beyond the implemented TLS and one-time pairing-challenge boundaries.
 - Production monitoring, deployment, migration/rollback, storage, and Stable acceptance evidence.
