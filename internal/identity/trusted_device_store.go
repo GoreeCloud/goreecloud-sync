@@ -13,18 +13,18 @@ import (
 )
 
 var (
-	ErrTrustedDeviceNotFound    = errors.New("trusted device not found")
-	ErrTrustedDeviceKeyMismatch = errors.New("trusted device key mismatch")
+	ErrTrustedDeviceNotFound     = errors.New("trusted device not found")
+	ErrTrustedDeviceKeyMismatch  = errors.New("trusted device key mismatch")
 	ErrInvalidTrustedDeviceStore = errors.New("invalid trusted device store")
 )
 
 type TrustedDevice struct {
-	AccountID   string     `json:"accountId"`
-	DeviceID    string     `json:"deviceId"`
-	PublicKey   string     `json:"publicKey"`
-	Fingerprint string     `json:"fingerprint"`
-	AuthorizedAt time.Time `json:"authorizedAt"`
-	RevokedAt   *time.Time `json:"revokedAt,omitempty"`
+	AccountID    string     `json:"accountId"`
+	DeviceID     string     `json:"deviceId"`
+	PublicKey    string     `json:"publicKey"`
+	Fingerprint  string     `json:"fingerprint"`
+	AuthorizedAt time.Time  `json:"authorizedAt"`
+	RevokedAt    *time.Time `json:"revokedAt,omitempty"`
 }
 
 type trustedDeviceFile struct {
