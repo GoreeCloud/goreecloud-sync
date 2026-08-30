@@ -113,9 +113,9 @@ func securePeerTLSConfig(local SecurePeerIdentity, expected TrustedPeerIdentity,
 		MinVersion:             tls.VersionTLS13,
 		MaxVersion:             tls.VersionTLS13,
 		Certificates:           []tls.Certificate{certificate},
-		NextProtos:              []string{securePeerALPN},
+		NextProtos:             []string{securePeerALPN},
 		SessionTicketsDisabled: true,
-		VerifyConnection:        verifySecurePeer(expected.DeviceID, expectedKey, client),
+		VerifyConnection:       verifySecurePeer(expected.DeviceID, expectedKey, client),
 	}
 	if client {
 		// Public Web PKI hostname verification is intentionally replaced by the
