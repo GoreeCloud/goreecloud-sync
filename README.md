@@ -17,7 +17,8 @@ The product direction is informed by useful capabilities in projects such as Syn
 The repository has advanced beyond its original Milestone 0 shell. Current source foundations include:
 
 - the Go service and CLI shell with loopback-safe development defaults and bounded shutdown behavior;
-- pre-stabilization `GC-SYNC/1` control framing and TCP peer-transport helpers;
+- pre-stabilization `GC-SYNC/1` control framing and context-bound TCP peer-transport helpers;
+- a TLS 1.3-only mutually authenticated secure-peer wrapper for already-trusted devices, using short-lived self-signed Ed25519 certificates as key-possession carriers, exact trusted device-ID/raw-public-key pinning, GoreeCloud Sync ALPN binding, bounded TLS handshakes, and capability-handshake identity binding;
 - Ed25519 device identity and signed pairing-proof primitives;
 - short-lived one-time pairing challenges with exact consumption, expiry rejection, and replay rejection;
 - durable account-scoped trusted-device authorization with explicit revocation, active-key replacement protection, and stored key/fingerprint validation;
@@ -29,7 +30,7 @@ The repository has advanced beyond its original Milestone 0 shell. Current sourc
 - record-bound proof, replay/high-water, observation-receipt, tombstone-convergence, and protected device-key lifecycle foundations;
 - bounded authenticated retrieval with deterministic record-ID cursor pagination.
 
-These are source and development contracts. They do **not** establish a complete production synchronization product. The default development service is not a production deployment, and Sync routes are registered only when the service is constructed with the required replication ingestor and authenticated peer resolver. Durable trusted-device enforcement is a source boundary that must also be wired into the applicable runtime composition; it does not substitute for authenticated encrypted peer-session establishment.
+These are source and development contracts. They do **not** establish a complete production synchronization product. The default development service is not a production deployment, and Sync routes are registered only when the service is constructed with the required replication ingestor and authenticated peer resolver. The secure-peer wrapper also requires an already-authorized expected device ID and Ed25519 public key supplied by higher-level orchestration; the default `serve` command does not yet compose production trusted-device lookup, listener/dial selection, or secure-session lifecycle management.
 
 No Stable or production-readiness claim should be inferred from repository source, passing CI, or the presence of these foundations.
 
@@ -86,7 +87,7 @@ curl http://127.0.0.1:8787/api/v1/status
 
 ## Still incomplete
 
-Major production and product work remains, including reviewed authenticated encryption for peer sessions, transport/session replay protection beyond the implemented one-time pairing challenge, production account/runtime wiring, user-facing pairing approval and revocation UX, LAN discovery, complete resumable file/folder synchronization, Nearby, Share E2EE, complete multi-user authorization and administration, Glaze UI product surfaces, Android and Debian clients, migration/rollback tooling, monitoring, deployment, and full Glaze UI/Wardveil Security/Privacy Shield/Everkeep/GoreeCloud Mesh/GoreeCloud Identity acceptance evidence appropriate to the final scope.
+Major production and product work remains, including production orchestration of authenticated TLS peer sessions with account/trusted-device lookup and listener/dial policy, broader transport/session replay and freshness policy beyond TLS and the implemented one-time pairing challenge, production account/runtime wiring, user-facing pairing approval and revocation UX, LAN discovery, complete resumable file/folder synchronization, Nearby, Share E2EE, complete multi-user authorization and administration, Glaze UI product surfaces, Android and Debian clients, migration/rollback tooling, monitoring, deployment, and full Glaze UI/Wardveil Security/Privacy Shield/Everkeep/GoreeCloud Mesh/GoreeCloud Identity acceptance evidence appropriate to the final scope.
 
 Syncthing or any other existing service must not be considered replaced merely because GoreeCloud Sync source foundations exist.
 
