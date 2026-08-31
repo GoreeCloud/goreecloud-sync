@@ -17,6 +17,7 @@ import (
 
 const (
 	securePeerALPN                = "goreecloud-sync/1"
+	securePeerReadyProtocol       = "GC-SYNC-TLS-READY/1"
 	securePeerCertificateLifetime = 24 * time.Hour
 	securePeerClockSkew           = 5 * time.Minute
 )
@@ -39,8 +40,16 @@ type TrustedPeerIdentity struct {
 	PublicKey ed25519.PublicKey
 }
 
-// DialSecurePeer establishes TCP and then completes a mutually authenticated
-// TLS 1.3 handshake pinned to the expected peer device/key identity.
+type securePeerReady struct {
+	Protocol         string `json:"protocol"`
+	DeviceID         string `json:"device_id"`
+	AcceptedDeviceID string `json:"accepted_device_id"`
+}
+
+// DialSecurePeer establishes TCP, completes the local TLS 1.3 handshake, and
+// waits for a protected server confirmation proving that the accepting side also
+// completed peer verification. It returns only after both device identities are
+// mutually accepted and pinned.
 func DialSecurePeer(ctx context.Context, address string, timeout time.Duration, local SecurePeerIdentity, expected TrustedPeerIdentity) (*PeerConn, error) {
 	if ctx == nil || address == "" || timeout <= 0 {
 		return nil, fmt.Errorf("secure peer context, address, and timeout are required")
@@ -61,7 +70,9 @@ func DialSecurePeer(ctx context.Context, address string, timeout time.Duration, 
 }
 
 // AcceptSecurePeer takes ownership of an accepted stream and requires a pinned
-// client identity before returning a PeerConn. Failure closes the stream.
+// client identity before returning a PeerConn. After successful TLS verification
+// it sends a protected ready confirmation so the dialer cannot treat a locally
+// completed TLS handshake as proof that the server accepted its client identity.
 func AcceptSecurePeer(ctx context.Context, conn net.Conn, timeout time.Duration, local SecurePeerIdentity, expected TrustedPeerIdentity) (*PeerConn, error) {
 	if ctx == nil || conn == nil || timeout <= 0 {
 		if conn != nil {
@@ -90,11 +101,49 @@ func upgradeSecurePeer(ctx context.Context, conn net.Conn, config *tls.Config, l
 		_ = conn.Close()
 		return nil, fmt.Errorf("%w: %v", ErrSecurePeerAuthentication, err)
 	}
+	if err := confirmSecurePeer(ctx, tlsConn, localDeviceID, expectedDeviceID, client); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
 	return &PeerConn{
 		conn:                  tlsConn,
 		localDeviceID:         localDeviceID,
 		authenticatedDeviceID: expectedDeviceID,
 	}, nil
+}
+
+func confirmSecurePeer(ctx context.Context, conn *tls.Conn, localDeviceID, expectedDeviceID string, client bool) error {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return fmt.Errorf("%w: secure peer confirmation deadline is unavailable", ErrSecurePeerAuthentication)
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		return fmt.Errorf("%w: set secure peer confirmation deadline: %v", ErrSecurePeerAuthentication, err)
+	}
+
+	var confirmationErr error
+	if client {
+		var ready securePeerReady
+		if err := ReadJSONFrame(conn, &ready); err != nil {
+			confirmationErr = fmt.Errorf("%w: receive peer acceptance confirmation: %v", ErrSecurePeerAuthentication, err)
+		} else if ready.Protocol != securePeerReadyProtocol || ready.DeviceID != expectedDeviceID || ready.AcceptedDeviceID != localDeviceID {
+			confirmationErr = fmt.Errorf("%w: invalid peer acceptance confirmation", ErrSecurePeerAuthentication)
+		}
+	} else {
+		ready := securePeerReady{
+			Protocol:         securePeerReadyProtocol,
+			DeviceID:         localDeviceID,
+			AcceptedDeviceID: expectedDeviceID,
+		}
+		if err := WriteJSONFrame(conn, ready); err != nil {
+			confirmationErr = fmt.Errorf("%w: send peer acceptance confirmation: %v", ErrSecurePeerAuthentication, err)
+		}
+	}
+
+	if err := conn.SetDeadline(time.Time{}); err != nil && confirmationErr == nil {
+		confirmationErr = fmt.Errorf("%w: clear secure peer confirmation deadline: %v", ErrSecurePeerAuthentication, err)
+	}
+	return confirmationErr
 }
 
 func securePeerTLSConfig(local SecurePeerIdentity, expected TrustedPeerIdentity, client bool) (*tls.Config, error) {
