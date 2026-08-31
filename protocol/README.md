@@ -16,7 +16,7 @@ Current source includes:
 - Ed25519 device identity, public-key fingerprinting, and pairing proofs bound to a device ID and one-time challenge;
 - cryptographically random short-lived pairing challenges with exact consumption, expiry rejection, and replay rejection;
 - durable account-scoped trusted-device authorization and explicit revocation foundations;
-- a TLS 1.3 secure-peer primitive for already-trusted peers using Go `crypto/tls` and `crypto/x509`, mutual Ed25519 key possession, exact trusted device-ID/raw-key pinning, GoreeCloud Sync ALPN, bounded handshake time, and GC-SYNC handshake identity binding;
+- a TLS 1.3 secure-peer primitive for already-trusted peers using Go `crypto/tls` and `crypto/x509`, mutual Ed25519 key possession, exact trusted device-ID/raw-key pinning, GoreeCloud Sync ALPN, bounded handshake time, a TLS-protected server acceptance confirmation, and GC-SYNC handshake identity binding;
 - first-party dataset capability negotiation with independent read, write, and delete permissions and highest mutually compatible schema selection;
 - versioned record envelopes carrying dataset, schema version, record ID, revision, timestamp, origin device, tombstone state, and application-owned payload;
 - deterministic record conflict resolution;
@@ -89,7 +89,7 @@ Current source can generate Ed25519 device identity material, derive stable publ
 
 Pairing proof demonstrates possession of the corresponding private key but does not itself authorize application data access. Durable trusted-device state remains a separate explicit approval step, and runtime trusted-peer enforcement remains separate from transport encryption.
 
-The direct secure-peer primitive accepts an already-authorized expected remote device ID and raw Ed25519 public key from higher-level code. It uses TLS 1.3 to prove key possession and protect the direct transport, then rejects a GC-SYNC capability handshake that claims a different device identity.
+The direct secure-peer primitive accepts an already-authorized expected remote device ID and raw Ed25519 public key from higher-level code. It uses TLS 1.3 to prove key possession and protect the direct transport. On the accepting side, the constructor returns only after the client certificate has passed exact device/key validation; it then sends a bounded TLS-protected ready confirmation containing the server identity and the client identity it accepted. The dialing constructor validates that confirmation before returning, so a locally completed TLS 1.3 client handshake is not mistaken for proof that the server accepted the client identity. Subsequent GC-SYNC capability handshakes are rejected if they claim a different device identity.
 
 Production account/trusted-device lookup, connection admission, reconnect/revocation behavior, user-facing approval/recovery/key-replacement UX, and broader session freshness policy remain incomplete.
 
