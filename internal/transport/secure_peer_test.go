@@ -115,6 +115,51 @@ func TestSecurePeerRejectsPinnedKeyMismatch(t *testing.T) {
 	_ = serverPublic
 }
 
+func TestSecurePeerServerRejectsPinnedClientKeyMismatch(t *testing.T) {
+	clientPublic, clientPrivate := newTestEd25519Key(t)
+	serverPublic, serverPrivate := newTestEd25519Key(t)
+	wrongClientPublic, _ := newTestEd25519Key(t)
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	serverResult := make(chan securePeerResult, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			serverResult <- securePeerResult{err: acceptErr}
+			return
+		}
+		peer, acceptErr := AcceptSecurePeer(ctx, conn, 2*time.Second,
+			SecurePeerIdentity{DeviceID: testServerDeviceID, PrivateKey: serverPrivate},
+			TrustedPeerIdentity{DeviceID: testClientDeviceID, PublicKey: wrongClientPublic})
+		serverResult <- securePeerResult{peer: peer, err: acceptErr}
+	}()
+
+	client, dialErr := DialSecurePeer(ctx, listener.Addr().String(), 2*time.Second,
+		SecurePeerIdentity{DeviceID: testClientDeviceID, PrivateKey: clientPrivate},
+		TrustedPeerIdentity{DeviceID: testServerDeviceID, PublicKey: serverPublic})
+	if client != nil {
+		_ = client.Close()
+	}
+	if dialErr == nil {
+		t.Fatal("client unexpectedly completed TLS after server rejected its key")
+	}
+	result := <-serverResult
+	if result.peer != nil {
+		_ = result.peer.Close()
+	}
+	if result.err == nil || !errors.Is(result.err, ErrSecurePeerAuthentication) {
+		t.Fatalf("server error = %v, want secure peer authentication failure", result.err)
+	}
+	_ = clientPublic
+}
+
 func TestSecurePeerRejectsPinnedDeviceIDMismatch(t *testing.T) {
 	clientPublic, clientPrivate := newTestEd25519Key(t)
 	serverPublic, serverPrivate := newTestEd25519Key(t)
