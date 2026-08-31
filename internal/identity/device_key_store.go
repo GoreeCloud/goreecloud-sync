@@ -127,17 +127,15 @@ func (s *DeviceKeyStore) Rotate(publicKey ed25519.PublicKey, privateKey ed25519.
 	if err != nil {
 		return StoredDeviceKey{}, err
 	}
-	if !validDeviceKeyMaterial(current.DeviceID, publicKey, privateKey) {
+	rotatedAt := now.UTC()
+	if rotatedAt.Before(current.CreatedAt) || !validDeviceKeyMaterial(current.DeviceID, publicKey, privateKey) {
 		return StoredDeviceKey{}, ErrInvalidDeviceKey
 	}
 	stored, err := s.Save(current.DeviceID, publicKey, privateKey, current.CreatedAt)
 	if err != nil {
 		return StoredDeviceKey{}, err
 	}
-	stored.RotatedAt = now.UTC()
-	if stored.RotatedAt.Before(stored.CreatedAt) {
-		return StoredDeviceKey{}, ErrInvalidDeviceKey
-	}
+	stored.RotatedAt = rotatedAt
 	if err := s.write(stored); err != nil {
 		return StoredDeviceKey{}, err
 	}
