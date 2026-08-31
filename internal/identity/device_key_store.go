@@ -65,10 +65,10 @@ func (s *DeviceKeyStore) Save(deviceID string, publicKey ed25519.PublicKey, priv
 		return StoredDeviceKey{}, ErrInvalidDeviceKey
 	}
 	stored := StoredDeviceKey{
-		DeviceID: deviceID,
-		PublicKey: base64.RawURLEncoding.EncodeToString(publicKey),
-		ProtectedKey: base64.RawURLEncoding.EncodeToString(sealed),
-		CreatedAt: now.UTC(),
+		DeviceID:       deviceID,
+		PublicKey:      base64.RawURLEncoding.EncodeToString(publicKey),
+		ProtectedKey:   base64.RawURLEncoding.EncodeToString(sealed),
+		CreatedAt:      now.UTC(),
 		KeyFingerprint: Fingerprint(publicKey),
 	}
 	if err := s.write(stored); err != nil {
