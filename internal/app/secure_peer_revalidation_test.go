@@ -12,7 +12,7 @@ import (
 )
 
 func TestSecurePeerFactoryRevalidatesBoundCurrentTrust(t *testing.T) {
-	client, server, clientPeer, serverPeer := establishSecureFactoryPeers(t)
+	client, _, clientPeer, serverPeer := establishSecureFactoryPeers(t)
 	defer clientPeer.Close()
 	defer serverPeer.Close()
 
@@ -27,7 +27,7 @@ func TestSecurePeerFactoryRevalidatesBoundCurrentTrust(t *testing.T) {
 		t.Fatalf("bound fingerprint = %q, trust fingerprint = %q", clientPeer.AuthenticatedKeyFingerprint(), serverDevice.Fingerprint)
 	}
 	if clientPeer.AuthenticatedKeyFingerprint() != identity.Fingerprint(serverKey) {
-		t.Fatalf("bound fingerprint does not match pinned public key")
+		t.Fatal("bound fingerprint does not match pinned public key")
 	}
 	if err := client.factory.RevalidatePeer(clientPeer); err != nil {
 		t.Fatalf("revalidate current trusted peer: %v", err)
