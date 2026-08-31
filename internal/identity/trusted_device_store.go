@@ -106,6 +106,35 @@ func (s *TrustedDeviceStore) IsTrusted(accountID, deviceID, fingerprint string) 
 	return false, nil
 }
 
+// Resolve returns one currently authorized account-scoped device and its exact
+// validated Ed25519 public key. Revoked, unknown, cross-account, or malformed
+// device state fails closed rather than becoming transport identity material.
+func (s *TrustedDeviceStore) Resolve(accountID, deviceID string) (TrustedDevice, ed25519.PublicKey, error) {
+	if s == nil || accountID == "" || !validDeviceID(deviceID) {
+		return TrustedDevice{}, nil, ErrTrustedDeviceNotFound
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, err := s.loadLocked()
+	if err != nil {
+		return TrustedDevice{}, nil, err
+	}
+	for _, device := range state.Devices {
+		if device.AccountID != accountID || device.DeviceID != deviceID {
+			continue
+		}
+		if device.RevokedAt != nil {
+			return TrustedDevice{}, nil, ErrTrustedDeviceNotFound
+		}
+		publicKey, err := trustedDevicePublicKey(device)
+		if err != nil {
+			return TrustedDevice{}, nil, err
+		}
+		return device, append(ed25519.PublicKey(nil), publicKey...), nil
+	}
+	return TrustedDevice{}, nil, ErrTrustedDeviceNotFound
+}
+
 func (s *TrustedDeviceStore) Revoke(accountID, deviceID string, now time.Time) (TrustedDevice, error) {
 	if s == nil || accountID == "" || !validDeviceID(deviceID) {
 		return TrustedDevice{}, ErrTrustedDeviceNotFound
@@ -194,17 +223,22 @@ func (s *TrustedDeviceStore) loadLocked() (trustedDeviceFile, error) {
 }
 
 func validateTrustedDevice(device TrustedDevice) error {
+	_, err := trustedDevicePublicKey(device)
+	return err
+}
+
+func trustedDevicePublicKey(device TrustedDevice) (ed25519.PublicKey, error) {
 	if device.AccountID == "" || !validDeviceID(device.DeviceID) || device.AuthorizedAt.IsZero() {
-		return ErrInvalidTrustedDeviceStore
+		return nil, ErrInvalidTrustedDeviceStore
 	}
 	publicKey, err := base64.RawURLEncoding.DecodeString(device.PublicKey)
 	if err != nil || len(publicKey) != ed25519.PublicKeySize {
-		return ErrInvalidTrustedDeviceStore
+		return nil, ErrInvalidTrustedDeviceStore
 	}
 	if Fingerprint(ed25519.PublicKey(publicKey)) != device.Fingerprint {
-		return ErrInvalidTrustedDeviceStore
+		return nil, ErrInvalidTrustedDeviceStore
 	}
-	return nil
+	return ed25519.PublicKey(publicKey), nil
 }
 
 func (s *TrustedDeviceStore) writeLocked(state trustedDeviceFile) error {
