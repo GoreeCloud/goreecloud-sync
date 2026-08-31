@@ -39,12 +39,12 @@ func (f SecurePeerFactory) ResolveIdentities(remoteDeviceID string) (transport.S
 		return transport.SecurePeerIdentity{}, transport.TrustedPeerIdentity{}, fmt.Errorf("load local secure peer identity: %w", err)
 	}
 	return transport.SecurePeerIdentity{
-		DeviceID:   local.DeviceID,
-		PrivateKey: localPrivateKey,
-	}, transport.TrustedPeerIdentity{
-		DeviceID:  remote.DeviceID,
-		PublicKey: remotePublicKey,
-	}, nil
+			DeviceID:   local.DeviceID,
+			PrivateKey: localPrivateKey,
+		}, transport.TrustedPeerIdentity{
+			DeviceID:  remote.DeviceID,
+			PublicKey: remotePublicKey,
+		}, nil
 }
 
 // DialSecurePeer resolves current identity/trust state and then establishes one
