@@ -28,7 +28,7 @@ This file distinguishes implemented repository capability from partial developme
 - Exact challenge consumption with expiry and replay rejection.
 - `VerifiedPairing` output only after pairing proof verification and challenge consumption.
 
-### Trusted-device authorization foundations
+### Trusted-device authorization and session foundations
 
 - Durable account-scoped trusted-device records.
 - Explicit authorization only from a verified pairing result.
@@ -38,6 +38,10 @@ This file distinguishes implemented repository capability from partial developme
 - Private trusted-device storage directory/file permissions and atomic publication.
 - Runtime trusted-peer resolver that composes authenticated peer resolution with exact account, device ID, and key-fingerprint authorization.
 - Fail-closed handling for unknown, revoked, mismatched, or trust-store-error states at that resolver boundary.
+- Secure-peer factory resolution of current trusted remote identity before local private-key opening and TLS admission.
+- Binding of the admitted trusted public-key fingerprint to the authenticated `PeerConn`.
+- Explicit `RevalidatePeer` checkpoint that rechecks the exact account/device/fingerprint against current trusted-device state and closes the local peer when trust is revoked, replaced, missing, corrupt, or unreadable.
+- Idempotent local peer close state for fail-closed session retirement.
 
 ### First-party application record replication foundations
 
@@ -58,12 +62,13 @@ This file distinguishes implemented repository capability from partial developme
 ## Partial or development-only features
 
 - The default `serve` command exposes the base development service and does not by itself wire the complete replication, account, trusted-device, or secure-peer runtime composition.
-- Pairing, one-time challenge consumption, trusted-device authorization, revocation, and trusted-peer enforcement exist as source foundations but do not yet provide complete user-facing pairing/trust administration.
-- The TLS 1.3 secure-peer wrapper requires higher-level code to supply the already-authorized expected device ID and raw Ed25519 public key; production trusted-device lookup, secure listener/dial orchestration, connection admission, and lifecycle wiring remain incomplete.
-- Raw TCP peer helpers remain intentionally unauthenticated lower-level primitives and must not be represented as secure sessions.
-- Account-scoped trusted-device state is durable locally, but production multi-user identity/account authority and runtime wiring remain incomplete.
-- First-party application-record replication handlers exist, but they are not a complete folder synchronization engine and are not a production deployment claim.
-- Privacy Shield and Wardveil decision boundaries exist in source, but complete production platform integration and acceptance evidence remain pending.
+- Pairing, challenge consumption, trust authorization, revocation, secure admission, and explicit revalidation exist as source foundations but do not yet provide complete user-facing trust administration.
+- `RevalidatePeer` is invoked explicitly by higher-level code; the repository does not yet schedule periodic/per-operation checks or automatically terminate every live session at the instant trust changes.
+- Production secure listener/dial orchestration, discovery/address policy, reconnect behavior, and complete session lifecycle remain incomplete.
+- Raw TCP peer helpers remain intentionally unauthenticated lower-level primitives.
+- Account-scoped trusted-device state is durable locally, but production multi-user identity/account authority remains incomplete.
+- First-party application-record replication handlers are not a complete folder synchronization engine or production deployment claim.
+- Privacy Shield and Wardveil decision boundaries exist in source, but complete production integration and acceptance evidence remain pending.
 
 ## Planned — Sync Core
 
@@ -117,6 +122,7 @@ This file distinguishes implemented repository capability from partial developme
 - Production GoreeCloud Identity/account runtime integration.
 - Complete account and independently owned-device administration.
 - User-facing device approval, revocation, recovery, retirement, and key-replacement workflows.
+- Approved runtime revalidation schedule/checkpoints and revocation-aware reconnect/session policy.
 - Explicit folder ACLs and multi-user isolation tests.
 - Read, write, contribute, receive-only, drop-only, and administrative grants.
 - Audit events and administrative activity views.
@@ -125,5 +131,5 @@ This file distinguishes implemented repository capability from partial developme
 - Glaze UI web administration and accessibility acceptance.
 - Native Android client and Debian packaging.
 - GoreeCloud Mesh coordination, GoreeCloud Network reachability, Notify, Manager, Photos, Drive, Search, API, Wardveil Security, Privacy Shield, Everkeep, and broader GoreeCloud Identity integrations as applicable.
-- Production orchestration of TLS-authenticated peer sessions with account/trusted-device lookup plus broader transport/session replay and freshness policy beyond the implemented TLS and one-time pairing-challenge boundaries.
+- Broader transport/session replay and freshness policy beyond implemented TLS and pairing-challenge boundaries.
 - Production monitoring, deployment, migration/rollback, storage, and Stable acceptance evidence.
