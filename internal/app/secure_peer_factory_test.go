@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"net"
 	"path/filepath"
@@ -135,7 +136,7 @@ func TestSecurePeerFactoryRejectsCrossAccountTrust(t *testing.T) {
 	}
 }
 
-func newSecureFactoryFixture(t *testing.T, name, accountID, localDeviceID string, localPublic, localPrivate []byte, remoteDeviceID string, remotePublic, remotePrivate []byte) secureFactoryFixture {
+func newSecureFactoryFixture(t *testing.T, name, accountID, localDeviceID string, localPublic ed25519.PublicKey, localPrivate ed25519.PrivateKey, remoteDeviceID string, remotePublic ed25519.PublicKey, remotePrivate ed25519.PrivateKey) secureFactoryFixture {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), name)
 	localStore, err := identity.NewDeviceKeyStore(filepath.Join(root, "device-key.json"), secureFactoryProtector{})
