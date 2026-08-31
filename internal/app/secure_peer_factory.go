@@ -14,6 +14,7 @@ import (
 var (
 	ErrSecurePeerFactoryUnavailable = errors.New("secure peer factory is unavailable")
 	ErrSecurePeerTrustNotCurrent    = errors.New("secure peer trust is no longer current")
+	ErrSecurePeerOperationRequired  = errors.New("secure peer operation is required")
 )
 
 // SecurePeerFactory resolves current durable remote-device trust and the local
@@ -127,4 +128,22 @@ func (f SecurePeerFactory) RevalidatePeer(peer *transport.PeerConn) error {
 		return ErrSecurePeerTrustNotCurrent
 	}
 	return nil
+}
+
+// RunWithCurrentTrust is the operation-level guard for reusing an established
+// secure peer. It revalidates the exact account/device/fingerprint immediately
+// before invoking operation. If trust is not current, operation is never called
+// and RevalidatePeer closes the local peer fail-closed.
+//
+// This helper makes explicit operation checkpoints reusable; it is not a
+// background revocation scheduler and cannot make trust changes instantaneous
+// between the checkpoint and an operation already in progress.
+func (f SecurePeerFactory) RunWithCurrentTrust(peer *transport.PeerConn, operation func(*transport.PeerConn) error) error {
+	if operation == nil {
+		return ErrSecurePeerOperationRequired
+	}
+	if err := f.RevalidatePeer(peer); err != nil {
+		return err
+	}
+	return operation(peer)
 }

@@ -55,6 +55,55 @@ func TestSecurePeerFactoryClosesPeerWhenTrustIsRevoked(t *testing.T) {
 	}
 }
 
+func TestRunWithCurrentTrustExecutesOnlyForCurrentPeer(t *testing.T) {
+	client, _, clientPeer, serverPeer := establishSecureFactoryPeers(t)
+	defer clientPeer.Close()
+	defer serverPeer.Close()
+
+	called := 0
+	if err := client.factory.RunWithCurrentTrust(clientPeer, func(peer *transport.PeerConn) error {
+		called++
+		if peer != clientPeer {
+			t.Fatal("operation received unexpected peer")
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("run trusted operation: %v", err)
+	}
+	if called != 1 || clientPeer.IsClosed() {
+		t.Fatalf("trusted operation called=%d closed=%v", called, clientPeer.IsClosed())
+	}
+}
+
+func TestRunWithCurrentTrustBlocksOperationAfterRevocation(t *testing.T) {
+	client, _, clientPeer, serverPeer := establishSecureFactoryPeers(t)
+	defer serverPeer.Close()
+
+	if _, err := client.trust.Revoke(secureFactoryAccountID, secureFactoryServerID, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	err := client.factory.RunWithCurrentTrust(clientPeer, func(*transport.PeerConn) error {
+		called = true
+		return nil
+	})
+	if !errors.Is(err, ErrSecurePeerTrustNotCurrent) {
+		t.Fatalf("run revoked operation error = %v", err)
+	}
+	if called {
+		t.Fatal("operation must not execute after trust revocation")
+	}
+	if !clientPeer.IsClosed() {
+		t.Fatal("revoked peer must be closed before operation returns")
+	}
+}
+
+func TestRunWithCurrentTrustRejectsMissingOperation(t *testing.T) {
+	if err := (SecurePeerFactory{}).RunWithCurrentTrust(nil, nil); !errors.Is(err, ErrSecurePeerOperationRequired) {
+		t.Fatalf("missing operation error = %v", err)
+	}
+}
+
 func TestSecurePeerFactoryRejectsUnauthenticatedPeerAtRevalidation(t *testing.T) {
 	local, remote := net.Pipe()
 	defer remote.Close()
