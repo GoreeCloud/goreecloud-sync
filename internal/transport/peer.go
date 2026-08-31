@@ -4,17 +4,21 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sync/atomic"
 	"time"
 )
 
 // PeerConn owns one bounded control-plane connection to a synchronization peer.
-// Raw DialPeer/AcceptPeer connections leave both identity fields empty. Secure
-// peer constructors populate them after TLS authentication so the GC-SYNC/1
-// capability handshake cannot claim a different device identity.
+// Raw DialPeer/AcceptPeer connections leave authenticated identity fields empty.
+// Secure peer constructors populate them after TLS authentication so the
+// GC-SYNC/1 capability handshake and later trust revalidation can remain bound
+// to the exact admitted device identity.
 type PeerConn struct {
-	conn                  net.Conn
-	localDeviceID         string
-	authenticatedDeviceID string
+	conn                        net.Conn
+	localDeviceID               string
+	authenticatedDeviceID       string
+	authenticatedKeyFingerprint string
+	closed                      atomic.Bool
 }
 
 // DialPeer establishes a context-bound TCP connection. Authentication and
@@ -48,8 +52,28 @@ func (p *PeerConn) AuthenticatedDeviceID() string {
 	return p.authenticatedDeviceID
 }
 
+// AuthenticatedKeyFingerprint returns the durable trusted-device fingerprint
+// associated with the key pinned during secure admission. It is populated by
+// the application trust factory; raw peers and direct transport callers that do
+// not supply a durable trust fingerprint return an empty string.
+func (p *PeerConn) AuthenticatedKeyFingerprint() string {
+	if p == nil {
+		return ""
+	}
+	return p.authenticatedKeyFingerprint
+}
+
+// IsClosed reports whether Close has been invoked on the PeerConn. It is a
+// local lifecycle signal, not evidence that a remote peer observed closure.
+func (p *PeerConn) IsClosed() bool {
+	return p == nil || p.closed.Load()
+}
+
 func (p *PeerConn) Close() error {
 	if p == nil || p.conn == nil {
+		return nil
+	}
+	if p.closed.Swap(true) {
 		return nil
 	}
 	return p.conn.Close()
@@ -57,7 +81,7 @@ func (p *PeerConn) Close() error {
 
 // SendHandshake writes one GC-SYNC/1 capability handshake using the bounded codec.
 func (p *PeerConn) SendHandshake(handshake Handshake) error {
-	if p == nil || p.conn == nil {
+	if p == nil || p.conn == nil || p.IsClosed() {
 		return fmt.Errorf("peer connection is unavailable")
 	}
 	if err := handshake.Validate(); err != nil {
@@ -76,7 +100,7 @@ func (p *PeerConn) SendHandshake(handshake Handshake) error {
 // validate protocol shape only. Secure peers additionally require the claimed
 // device ID to match the identity authenticated by TLS.
 func (p *PeerConn) ReceiveHandshake() (Handshake, error) {
-	if p == nil || p.conn == nil {
+	if p == nil || p.conn == nil || p.IsClosed() {
 		return Handshake{}, fmt.Errorf("peer connection is unavailable")
 	}
 	var handshake Handshake
