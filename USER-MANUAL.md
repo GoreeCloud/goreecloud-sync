@@ -2,7 +2,7 @@
 
 ## Current status
 
-GoreeCloud Sync is under active development and is pre-Stable. Current source includes first-party application-record replication foundations, device pairing/trust, TLS 1.3 authenticated peer transport, and explicit current-trust revalidation. The default development service is not a production synchronization deployment.
+GoreeCloud Sync is under active development and is pre-Stable. Current source includes first-party application-record replication foundations, device pairing/trust, TLS 1.3 authenticated peer transport, explicit current-trust revalidation, and an operation-level trust guard. The default development service is not a production synchronization deployment.
 
 ## Run the development service
 
@@ -55,9 +55,13 @@ against the current trusted-device store.
 
 If the trusted device was revoked, replaced, removed, became corrupt, or the trust store cannot be read safely, revalidation fails closed and closes the local peer connection.
 
+Source also provides `RunWithCurrentTrust` for an operation boundary. It performs the same current-trust revalidation immediately before invoking the supplied peer operation. If trust is no longer current, the operation is not invoked and the local peer is closed by the revalidation path.
+
 ### Important lifecycle limitation
 
-Revalidation is currently explicit, not background/instantaneous. The source does not claim that every established connection closes at the exact moment a trust record changes. An approved production runtime must choose appropriate operation/session checkpoints and reconnect policy so long-lived or reused sessions are revalidated when current authorization is required.
+Revalidation remains explicit, not background/instantaneous. `RunWithCurrentTrust` reduces the chance that an operation boundary forgets the check, but higher-level orchestration still chooses where and how often that guard is invoked. The source does not claim that every established connection closes at the exact moment a trust record changes, nor can the guard revoke an operation already in progress after its pre-operation checkpoint.
+
+An approved production runtime must choose appropriate operation/session checkpoints and reconnect policy so long-lived or reused sessions are revalidated when current authorization is required.
 
 ## First-party application-record Sync
 
@@ -100,7 +104,8 @@ Synchronization is not backup. Everkeep remains the GoreeCloud continuity, prese
 
 - production secure listener/dial orchestration;
 - approved discovery and address selection;
-- automatic revalidation scheduling and revocation-aware reconnect policy;
+- approved operation/session revalidation checkpoints and revocation-aware reconnect policy;
+- automatic background revocation scheduling;
 - production GoreeCloud Identity/account integration;
 - user-facing device approval/revocation/recovery administration;
 - complete folder synchronization;
@@ -115,6 +120,6 @@ Synchronization is not backup. Everkeep remains the GoreeCloud continuity, prese
 
 If secure admission fails after a device was revoked, that is expected fail-closed behavior. Re-authorize the device only through the approved pairing/trust process rather than editing the trusted-device file manually.
 
-If an established peer is closed by `RevalidatePeer`, inspect current account-scoped trust state. A changed key fingerprint is treated as a different trust state and must not be silently accepted.
+If an established peer is closed by `RevalidatePeer` or `RunWithCurrentTrust`, inspect current account-scoped trust state. A changed key fingerprint is treated as a different trust state and must not be silently accepted.
 
 If the default development service does not expose full Sync routes or peer networking, that is expected: those capabilities require explicit dependency/runtime composition and are not enabled by the base `serve` command.
