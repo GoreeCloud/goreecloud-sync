@@ -28,6 +28,14 @@ func TestTrustedDeviceStoreAuthorizesConsumedPairingAndPersists(t *testing.T) {
 		t.Fatalf("trusted=%v err=%v", trusted, err)
 	}
 
+	resolved, publicKey, err := store.Resolve("account-a", verified.DeviceID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.DeviceID != verified.DeviceID() || Fingerprint(publicKey) != verified.Fingerprint() {
+		t.Fatalf("resolved=%+v fingerprint=%s", resolved, Fingerprint(publicKey))
+	}
+
 	reloaded, err := NewTrustedDeviceStore(path)
 	if err != nil {
 		t.Fatal(err)
@@ -35,6 +43,10 @@ func TestTrustedDeviceStoreAuthorizesConsumedPairingAndPersists(t *testing.T) {
 	trusted, err = reloaded.IsTrusted("account-a", verified.DeviceID(), verified.Fingerprint())
 	if err != nil || !trusted {
 		t.Fatalf("reloaded trusted=%v err=%v", trusted, err)
+	}
+	resolved, publicKey, err = reloaded.Resolve("account-a", verified.DeviceID())
+	if err != nil || resolved.DeviceID != verified.DeviceID() || Fingerprint(publicKey) != verified.Fingerprint() {
+		t.Fatalf("reloaded resolve device=%+v fingerprint=%s err=%v", resolved, Fingerprint(publicKey), err)
 	}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -61,6 +73,9 @@ func TestTrustedDeviceStoreScopesTrustByAccountAndRevokes(t *testing.T) {
 	if trusted {
 		t.Fatal("trust must not cross account boundaries")
 	}
+	if _, _, err := store.Resolve("account-b", verified.DeviceID()); !errors.Is(err, ErrTrustedDeviceNotFound) {
+		t.Fatalf("cross-account resolve err=%v", err)
+	}
 	if _, err := store.Revoke("account-a", verified.DeviceID(), time.Now()); err != nil {
 		t.Fatal(err)
 	}
@@ -70,6 +85,9 @@ func TestTrustedDeviceStoreScopesTrustByAccountAndRevokes(t *testing.T) {
 	}
 	if trusted {
 		t.Fatal("revoked device must not remain trusted")
+	}
+	if _, _, err := store.Resolve("account-a", verified.DeviceID()); !errors.Is(err, ErrTrustedDeviceNotFound) {
+		t.Fatalf("revoked resolve err=%v", err)
 	}
 }
 
