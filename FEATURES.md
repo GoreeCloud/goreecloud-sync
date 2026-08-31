@@ -41,6 +41,7 @@ This file distinguishes implemented repository capability from partial developme
 - Secure-peer factory resolution of current trusted remote identity before local private-key opening and TLS admission.
 - Binding of the admitted trusted public-key fingerprint to the authenticated `PeerConn`.
 - Explicit `RevalidatePeer` checkpoint that rechecks the exact account/device/fingerprint against current trusted-device state and closes the local peer when trust is revoked, replaced, missing, corrupt, or unreadable.
+- `RunWithCurrentTrust` operation guard that performs that current-trust check immediately before invoking a protected peer operation and never invokes the callback when trust is no longer current.
 - Idempotent local peer close state for fail-closed session retirement.
 
 ### First-party application record replication foundations
@@ -62,8 +63,8 @@ This file distinguishes implemented repository capability from partial developme
 ## Partial or development-only features
 
 - The default `serve` command exposes the base development service and does not by itself wire the complete replication, account, trusted-device, or secure-peer runtime composition.
-- Pairing, challenge consumption, trust authorization, revocation, secure admission, and explicit revalidation exist as source foundations but do not yet provide complete user-facing trust administration.
-- `RevalidatePeer` is invoked explicitly by higher-level code; the repository does not yet schedule periodic/per-operation checks or automatically terminate every live session at the instant trust changes.
+- Pairing, challenge consumption, trust authorization, revocation, secure admission, explicit revalidation, and the operation guard exist as source foundations but do not yet provide complete user-facing trust administration.
+- `RunWithCurrentTrust` is invoked explicitly by higher-level code; the repository does not yet choose production operation/lifecycle checkpoints, schedule periodic checks, or automatically terminate every live session at the instant trust changes.
 - Production secure listener/dial orchestration, discovery/address policy, reconnect behavior, and complete session lifecycle remain incomplete.
 - Raw TCP peer helpers remain intentionally unauthenticated lower-level primitives.
 - Account-scoped trusted-device state is durable locally, but production multi-user identity/account authority remains incomplete.
