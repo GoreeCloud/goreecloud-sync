@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -54,13 +55,34 @@ func (p *PeerConn) AuthenticatedDeviceID() string {
 
 // AuthenticatedKeyFingerprint returns the durable trusted-device fingerprint
 // associated with the key pinned during secure admission. It is populated by
-// the application trust factory; raw peers and direct transport callers that do
-// not supply a durable trust fingerprint return an empty string.
+// the application trust factory; raw peers return an empty string.
 func (p *PeerConn) AuthenticatedKeyFingerprint() string {
 	if p == nil {
 		return ""
 	}
 	return p.authenticatedKeyFingerprint
+}
+
+// BindAuthenticatedKeyFingerprint attaches the durable trust-store fingerprint
+// for the key already authenticated by the secure transport. The binding is
+// write-once: callers cannot replace it after admission. Raw unauthenticated
+// peers cannot acquire a durable trust fingerprint through this method.
+func (p *PeerConn) BindAuthenticatedKeyFingerprint(fingerprint string) error {
+	if p == nil || p.conn == nil || p.IsClosed() || p.authenticatedDeviceID == "" {
+		return fmt.Errorf("authenticated peer connection is unavailable")
+	}
+	fingerprint = strings.TrimSpace(fingerprint)
+	if fingerprint == "" {
+		return fmt.Errorf("authenticated key fingerprint is required")
+	}
+	if p.authenticatedKeyFingerprint != "" {
+		if p.authenticatedKeyFingerprint == fingerprint {
+			return nil
+		}
+		return fmt.Errorf("authenticated key fingerprint is already bound")
+	}
+	p.authenticatedKeyFingerprint = fingerprint
+	return nil
 }
 
 // IsClosed reports whether Close has been invoked on the PeerConn. It is a
