@@ -2,7 +2,7 @@
 
 ## Status
 
-**Pre-stabilization.** Source-level protocol and replication primitives exist, but no GoreeCloud Sync wire protocol is approved as a Stable compatibility promise or production security boundary.
+**Pre-stabilization.** Source-level protocol, replication, device-trust, and secure-peer primitives exist, but no GoreeCloud Sync wire protocol is approved as a Stable compatibility promise or complete production security boundary.
 
 `GC-SYNC/1` is a development protocol identifier used by the current bounded control-frame and peer-transport foundation. It must not be treated as a frozen public protocol version.
 
@@ -12,8 +12,11 @@ Current source includes:
 
 - bounded length-prefixed JSON control frames with a 1 MiB maximum, strict field decoding, truncated-frame rejection, and trailing-value rejection;
 - capability-handshake validation for protocol identifiers, device IDs, feature counts, feature names, and duplicate capabilities;
-- TCP peer-stream helpers for exchanging the pre-stabilization capability handshake;
+- raw TCP peer-stream helpers for exchanging the pre-stabilization capability handshake without implying trust;
 - Ed25519 device identity, public-key fingerprinting, and pairing proofs bound to a device ID and one-time challenge;
+- cryptographically random short-lived pairing challenges with exact consumption, expiry rejection, and replay rejection;
+- durable account-scoped trusted-device authorization and explicit revocation foundations;
+- a TLS 1.3 secure-peer primitive for already-trusted peers using Go `crypto/tls` and `crypto/x509`, mutual Ed25519 key possession, exact trusted device-ID/raw-key pinning, GoreeCloud Sync ALPN, bounded handshake time, a TLS-protected server acceptance confirmation, and GC-SYNC handshake identity binding;
 - first-party dataset capability negotiation with independent read, write, and delete permissions and highest mutually compatible schema selection;
 - versioned record envelopes carrying dataset, schema version, record ID, revision, timestamp, origin device, tombstone state, and application-owned payload;
 - deterministic record conflict resolution;
@@ -23,7 +26,7 @@ Current source includes:
 - authenticated ingestion and retrieval handlers for current Browser, Search, and Bookmarks datasets;
 - deterministic retrieval pagination ordered by bounded record ID using `limit` and exclusive `after` continuation.
 
-These primitives prove source progress only. They do not prove end-to-end production transport security, complete multi-device convergence, deployment acceptance, or Stable compatibility.
+These primitives prove source progress only. They do not prove complete production secure-session orchestration, complete multi-device convergence, deployment acceptance, or Stable compatibility.
 
 ## Goals
 
@@ -47,7 +50,7 @@ The protocol must not:
 
 - invent new cryptographic primitives;
 - assume network membership equals authorization;
-- treat key possession alone as permission to read or write application data;
+- treat key possession or a successful TLS connection alone as permission to read or write application data;
 - allow clients to self-assert Privacy Shield consent or Wardveil trust decisions;
 - silently discard file or record conflicts;
 - retain deleted application payload merely to communicate deletion;
@@ -70,18 +73,25 @@ Record / transfer manifest + integrity contract
         |
 Conflict, deletion, replay, resume state
         |
-Authenticated encrypted session (production design pending)
+TLS 1.3 authenticated direct-peer primitive
+  (already-trusted device identity; production admission/orchestration pending)
         |
-LAN | private network | direct Internet | relay
+LAN | private network | direct Internet | future relay
 ```
 
 Application ownership remains explicit. GoreeCloud Sync coordinates transport, authorization evidence, convergence, and replication metadata; it does not take ownership of Browser, Search, or Bookmarks payload semantics.
 
+Raw peer TCP remains a separate lower-level primitive and must not be treated as an authenticated encrypted session.
+
 ## Identity and pairing
 
-Current source can generate Ed25519 device identity material, derive stable public-key fingerprints, and verify a signed pairing proof bound to device ID and challenge.
+Current source can generate Ed25519 device identity material, derive stable public-key fingerprints, verify a signed pairing proof bound to device ID and challenge, enforce one-time challenge expiry/replay behavior, and authorize the resulting verified pairing into durable account-scoped trusted-device state.
 
-That proves possession of the corresponding private key only. Explicit trust approval, challenge expiry/replay enforcement across the final pairing flow, persistent trusted-device state, revocation UX, and final authenticated-encryption session establishment remain separate requirements.
+Pairing proof demonstrates possession of the corresponding private key but does not itself authorize application data access. Durable trusted-device state remains a separate explicit approval step, and runtime trusted-peer enforcement remains separate from transport encryption.
+
+The direct secure-peer primitive accepts an already-authorized expected remote device ID and raw Ed25519 public key from higher-level code. It uses TLS 1.3 to prove key possession and protect the direct transport. On the accepting side, the constructor returns only after the client certificate has passed exact device/key validation; it then sends a bounded TLS-protected ready confirmation containing the server identity and the client identity it accepted. The dialing constructor validates that confirmation before returning, so a locally completed TLS 1.3 client handshake is not mistaken for proof that the server accepted the client identity. Subsequent GC-SYNC capability handshakes are rejected if they claim a different device identity.
+
+Production account/trusted-device lookup, connection admission, reconnect/revocation behavior, user-facing approval/recovery/key-replacement UX, and broader session freshness policy remain incomplete.
 
 ## First-party record replication
 
@@ -110,18 +120,22 @@ The transfer-engine foundation contains integrity and framing primitives, but a 
 
 A future stable transfer manifest must describe the minimum information required to verify and resume an operation, including version, transfer identifier, payload type, size information, chunking information, integrity identifiers, and authorized operation. Metadata exposure must be minimized.
 
-## Integrity
+## Integrity and encryption
 
 Chunk verification and final payload verification are separate states. A completed network transfer cannot be reported as verified until the applicable integrity checks succeed.
 
-SHA-256 is currently used for implemented content-digest and fingerprint foundations where recorded by source. Final authenticated-encryption, key-agreement, and key-derivation choices remain security-review decisions and must use reviewed standard cryptographic dependencies rather than GoreeCloud-invented primitives.
+SHA-256 is currently used for implemented content-digest and fingerprint foundations where recorded by source.
+
+For already-trusted direct peers, the current secure-peer source primitive uses TLS 1.3 from Go's reviewed standard library for transport confidentiality, integrity, and mutual key-possession proof. This does not by itself define production connection admission, complete replay/freshness policy, future relay security, or Share end-to-end encryption.
+
+Future Share E2EE, relay-independent confidentiality, and any additional key-agreement or key-derivation requirements must use reviewed standard cryptographic dependencies rather than GoreeCloud-invented primitives.
 
 ## Compatibility
 
 Protocol changes must use explicit version/capability negotiation. Breaking changes must not be shipped under an unchanged compatibility identifier once a Stable protocol exists.
 
-Until stabilization, current development identifiers, schemas, and route contracts may change through reviewed migrations. Source consumers must fail closed on incompatible dataset/schema or continuation behavior.
+Until stabilization, current development identifiers, schemas, secure-peer contracts, and route contracts may change through reviewed migrations. Source consumers must fail closed on incompatible dataset/schema, identity, or continuation behavior.
 
 ## Security review gate
 
-No temporary-share E2EE claim, production peer-security claim, Syncthing-replacement claim, or Stable sync-protocol claim may be made until the concrete protocol specification, threat model, cryptographic dependency choices, test vectors, downgrade behavior, replay/expiry protections, trust approval and revocation semantics, durable authorization model, migration/rollback path, and target-environment evidence have been reviewed and validated.
+No temporary-share E2EE claim, complete production peer-security claim, Syncthing-replacement claim, or Stable sync-protocol claim may be made until the concrete protocol specification, threat model, cryptographic dependency choices, test vectors, downgrade behavior, replay/expiry protections, trust approval and revocation semantics, durable authorization model, production connection-admission/runtime composition, migration/rollback path, and target-environment evidence have been reviewed and validated.
