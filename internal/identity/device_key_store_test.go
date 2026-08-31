@@ -76,6 +76,30 @@ func TestDeviceKeyStoreProtectsAndRotatesKeys(t *testing.T) {
 	}
 }
 
+func TestDeviceKeyStoreRejectedRotationDoesNotMutateKey(t *testing.T) {
+	publicKey, privateKey := newDeviceKeyPair(t)
+	path := filepath.Join(t.TempDir(), "device-key.json")
+	store, err := NewDeviceKeyStore(path, protectorStub{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := time.Unix(200, 0).UTC()
+	if _, err := store.Save(testStoredDeviceID, publicKey, privateKey, created); err != nil {
+		t.Fatal(err)
+	}
+	newPublic, newPrivate := newDeviceKeyPair(t)
+	if _, err := store.Rotate(newPublic, newPrivate, time.Unix(100, 0).UTC()); !errors.Is(err, ErrInvalidDeviceKey) {
+		t.Fatalf("rotate error = %v, want ErrInvalidDeviceKey", err)
+	}
+	stored, loadedPrivate, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.KeyFingerprint != Fingerprint(publicKey) || !stored.RotatedAt.IsZero() || !loadedPrivate.Equal(privateKey) {
+		t.Fatalf("rejected rotation mutated stored identity: %+v", stored)
+	}
+}
+
 func TestDeviceKeyStoreRejectsMismatchedKeyPair(t *testing.T) {
 	publicKey, _ := newDeviceKeyPair(t)
 	_, otherPrivate := newDeviceKeyPair(t)
