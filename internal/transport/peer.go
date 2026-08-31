@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -18,6 +19,7 @@ type PeerConn struct {
 	conn                        net.Conn
 	localDeviceID               string
 	authenticatedDeviceID       string
+	trustMu                     sync.RWMutex
 	authenticatedKeyFingerprint string
 	closed                      atomic.Bool
 }
@@ -60,6 +62,8 @@ func (p *PeerConn) AuthenticatedKeyFingerprint() string {
 	if p == nil {
 		return ""
 	}
+	p.trustMu.RLock()
+	defer p.trustMu.RUnlock()
 	return p.authenticatedKeyFingerprint
 }
 
@@ -75,6 +79,8 @@ func (p *PeerConn) BindAuthenticatedKeyFingerprint(fingerprint string) error {
 	if fingerprint == "" {
 		return fmt.Errorf("authenticated key fingerprint is required")
 	}
+	p.trustMu.Lock()
+	defer p.trustMu.Unlock()
 	if p.authenticatedKeyFingerprint != "" {
 		if p.authenticatedKeyFingerprint == fingerprint {
 			return nil
