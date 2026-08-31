@@ -11,7 +11,10 @@ import (
 	"github.com/GoreeCloud/goreecloud-sync/internal/transport"
 )
 
-var ErrSecurePeerFactoryUnavailable = errors.New("secure peer factory is unavailable")
+var (
+	ErrSecurePeerFactoryUnavailable = errors.New("secure peer factory is unavailable")
+	ErrSecurePeerTrustNotCurrent    = errors.New("secure peer trust is no longer current")
+)
 
 // SecurePeerFactory resolves current durable remote-device trust and the local
 // protected device identity immediately before secure transport admission. It
@@ -48,17 +51,28 @@ func (f SecurePeerFactory) ResolveIdentities(remoteDeviceID string) (transport.S
 }
 
 // DialSecurePeer resolves current identity/trust state and then establishes one
-// authenticated TLS 1.3 peer session to an address selected by the caller.
+// authenticated TLS 1.3 peer session to an address selected by the caller. The
+// durable fingerprint for the already-validated pinned key is bound to the
+// returned PeerConn so later explicit trust checkpoints can revalidate it.
 func (f SecurePeerFactory) DialSecurePeer(ctx context.Context, address string, timeout time.Duration, remoteDeviceID string) (*transport.PeerConn, error) {
 	local, remote, err := f.ResolveIdentities(remoteDeviceID)
 	if err != nil {
 		return nil, err
 	}
-	return transport.DialSecurePeer(ctx, address, timeout, local, remote)
+	peer, err := transport.DialSecurePeer(ctx, address, timeout, local, remote)
+	if err != nil {
+		return nil, err
+	}
+	if err := peer.BindAuthenticatedKeyFingerprint(identity.Fingerprint(remote.PublicKey)); err != nil {
+		_ = peer.Close()
+		return nil, fmt.Errorf("bind secure peer trust identity: %w", err)
+	}
+	return peer, nil
 }
 
 // AcceptSecurePeer takes ownership of conn. It resolves current identity/trust
-// state before TLS admission and closes the accepted stream if resolution fails.
+// state before TLS admission and closes the accepted stream if resolution or
+// durable trust-identity binding fails.
 func (f SecurePeerFactory) AcceptSecurePeer(ctx context.Context, conn net.Conn, timeout time.Duration, remoteDeviceID string) (*transport.PeerConn, error) {
 	local, remote, err := f.ResolveIdentities(remoteDeviceID)
 	if err != nil {
@@ -67,5 +81,50 @@ func (f SecurePeerFactory) AcceptSecurePeer(ctx context.Context, conn net.Conn, 
 		}
 		return nil, err
 	}
-	return transport.AcceptSecurePeer(ctx, conn, timeout, local, remote)
+	peer, err := transport.AcceptSecurePeer(ctx, conn, timeout, local, remote)
+	if err != nil {
+		return nil, err
+	}
+	if err := peer.BindAuthenticatedKeyFingerprint(identity.Fingerprint(remote.PublicKey)); err != nil {
+		_ = peer.Close()
+		return nil, fmt.Errorf("bind secure peer trust identity: %w", err)
+	}
+	return peer, nil
+}
+
+// RevalidatePeer checks whether the exact account-scoped device ID and key
+// fingerprint admitted for this secure session are still trusted now. A revoked,
+// replaced, missing, malformed, or unreadable trust record fails closed and the
+// local connection is closed before the error is returned.
+//
+// This is an explicit lifecycle/operation checkpoint; it does not imply that a
+// session is asynchronously terminated at the instant trust changes. Runtime
+// orchestration must invoke it at the boundaries where current authorization is
+// required and before reusing long-lived sessions.
+func (f SecurePeerFactory) RevalidatePeer(peer *transport.PeerConn) error {
+	if f.AccountID == "" || f.TrustedDevices == nil {
+		if peer != nil {
+			_ = peer.Close()
+		}
+		return ErrSecurePeerFactoryUnavailable
+	}
+	if peer == nil {
+		return ErrSecurePeerTrustNotCurrent
+	}
+	deviceID := peer.AuthenticatedDeviceID()
+	fingerprint := peer.AuthenticatedKeyFingerprint()
+	if deviceID == "" || fingerprint == "" {
+		_ = peer.Close()
+		return ErrSecurePeerTrustNotCurrent
+	}
+	trusted, err := f.TrustedDevices.IsTrusted(f.AccountID, deviceID, fingerprint)
+	if err != nil {
+		_ = peer.Close()
+		return fmt.Errorf("revalidate secure peer trust: %w", err)
+	}
+	if !trusted {
+		_ = peer.Close()
+		return ErrSecurePeerTrustNotCurrent
+	}
+	return nil
 }
