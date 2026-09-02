@@ -14,10 +14,10 @@ import (
 const maxSecurePeerOperationSequence = 64
 
 var (
-	ErrSecurePeerFactoryUnavailable      = errors.New("secure peer factory is unavailable")
-	ErrSecurePeerTrustNotCurrent         = errors.New("secure peer trust is no longer current")
-	ErrSecurePeerOperationRequired       = errors.New("secure peer operation is required")
-	ErrSecurePeerOperationSequence       = errors.New("secure peer operation sequence is invalid")
+	ErrSecurePeerFactoryUnavailable = errors.New("secure peer factory is unavailable")
+	ErrSecurePeerTrustNotCurrent    = errors.New("secure peer trust is no longer current")
+	ErrSecurePeerOperationRequired  = errors.New("secure peer operation is required")
+	ErrSecurePeerOperationSequence  = errors.New("secure peer operation sequence is invalid")
 )
 
 // SecurePeerFactory resolves current durable remote-device trust and the local
