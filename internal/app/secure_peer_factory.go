@@ -11,10 +11,13 @@ import (
 	"github.com/GoreeCloud/goreecloud-sync/internal/transport"
 )
 
+const maxSecurePeerOperationSequence = 64
+
 var (
 	ErrSecurePeerFactoryUnavailable = errors.New("secure peer factory is unavailable")
 	ErrSecurePeerTrustNotCurrent    = errors.New("secure peer trust is no longer current")
 	ErrSecurePeerOperationRequired  = errors.New("secure peer operation is required")
+	ErrSecurePeerOperationSequence  = errors.New("secure peer operation sequence is invalid")
 )
 
 // SecurePeerFactory resolves current durable remote-device trust and the local
@@ -146,4 +149,30 @@ func (f SecurePeerFactory) RunWithCurrentTrust(peer *transport.PeerConn, operati
 		return err
 	}
 	return operation(peer)
+}
+
+// RunOperationSequenceWithCurrentTrust executes a bounded sequence of peer
+// operations and revalidates durable current trust before every individual step.
+// All operation slots are validated before the first callback is invoked so a
+// malformed sequence cannot partially execute. If trust changes between steps,
+// the next checkpoint fails closed and the remaining operations are not run.
+//
+// This remains synchronous explicit orchestration. It does not claim background
+// or instantaneous revocation, and it cannot revoke an operation already in
+// progress after that operation's pre-execution checkpoint.
+func (f SecurePeerFactory) RunOperationSequenceWithCurrentTrust(peer *transport.PeerConn, operations []func(*transport.PeerConn) error) error {
+	if len(operations) == 0 || len(operations) > maxSecurePeerOperationSequence {
+		return ErrSecurePeerOperationSequence
+	}
+	for _, operation := range operations {
+		if operation == nil {
+			return ErrSecurePeerOperationRequired
+		}
+	}
+	for _, operation := range operations {
+		if err := f.RunWithCurrentTrust(peer, operation); err != nil {
+			return err
+		}
+	}
+	return nil
 }
