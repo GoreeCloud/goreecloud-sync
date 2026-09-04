@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 )
 
 const PayloadProtocolVersion = 1
@@ -37,6 +38,17 @@ type PayloadDecision struct {
 	Version    int    `json:"version"`
 	TransferID string `json:"transfer_id"`
 	Accepted   bool   `json:"accepted"`
+}
+
+// PayloadCompletion is sent by the sender after all declared chunks have been
+// written and the sender has independently revalidated the complete source
+// against the manifest. It preserves message ordering before the receiver emits
+// a verified receipt.
+type PayloadCompletion struct {
+	Version    int    `json:"version"`
+	TransferID string `json:"transfer_id"`
+	Size       int64  `json:"size"`
+	Hash       string `json:"hash"`
 }
 
 // PayloadReceipt is emitted only after the receiver has accepted every declared
@@ -105,6 +117,25 @@ func (d PayloadDecision) ValidateFor(offer PayloadOffer) error {
 	return nil
 }
 
+func (c PayloadCompletion) ValidateFor(offer PayloadOffer) error {
+	if c.Version != PayloadProtocolVersion {
+		return fmt.Errorf("unsupported payload completion version %d", c.Version)
+	}
+	if err := validateTransferID(c.TransferID); err != nil {
+		return err
+	}
+	if c.TransferID != offer.TransferID {
+		return fmt.Errorf("payload completion transfer ID does not match offer")
+	}
+	if c.Size != offer.Manifest.Size {
+		return fmt.Errorf("payload completion size %d does not match manifest size %d", c.Size, offer.Manifest.Size)
+	}
+	if c.Hash != offer.Manifest.Hash {
+		return fmt.Errorf("payload completion hash does not match manifest hash")
+	}
+	return nil
+}
+
 func (r PayloadReceipt) ValidateFor(offer PayloadOffer) error {
 	if r.Version != PayloadProtocolVersion {
 		return fmt.Errorf("unsupported payload receipt version %d", r.Version)
@@ -127,6 +158,15 @@ func (r PayloadReceipt) ValidateFor(offer PayloadOffer) error {
 	return nil
 }
 
+func CompletedPayload(offer PayloadOffer) PayloadCompletion {
+	return PayloadCompletion{
+		Version:    PayloadProtocolVersion,
+		TransferID: offer.TransferID,
+		Size:       offer.Manifest.Size,
+		Hash:       offer.Manifest.Hash,
+	}
+}
+
 func VerifiedPayloadReceipt(offer PayloadOffer) PayloadReceipt {
 	return PayloadReceipt{
 		Version:    PayloadProtocolVersion,
@@ -141,10 +181,7 @@ func validateTransferID(transferID string) error {
 	if len(transferID) != 32 {
 		return fmt.Errorf("transfer ID must contain 32 lowercase hexadecimal characters")
 	}
-	if transferID != string([]byte(transferID)) {
-		return fmt.Errorf("transfer ID is invalid")
-	}
-	if transferID != lowerASCII(transferID) {
+	if transferID != strings.ToLower(transferID) {
 		return fmt.Errorf("transfer ID must use lowercase hexadecimal")
 	}
 	decoded, err := hex.DecodeString(transferID)
@@ -152,14 +189,4 @@ func validateTransferID(transferID string) error {
 		return fmt.Errorf("transfer ID is not valid hexadecimal")
 	}
 	return nil
-}
-
-func lowerASCII(value string) string {
-	out := []byte(value)
-	for index, b := range out {
-		if b >= 'A' && b <= 'Z' {
-			out[index] = b + ('a' - 'A')
-		}
-	}
-	return string(out)
 }
