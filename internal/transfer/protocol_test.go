@@ -8,7 +8,7 @@ import (
 
 const testTransferID = "00112233445566778899aabbccddeeff"
 
-func TestPayloadOfferDecisionAndReceiptValidation(t *testing.T) {
+func TestPayloadOfferDecisionCompletionAndReceiptValidation(t *testing.T) {
 	payload := []byte("authenticated GoreeCloud Sync payload")
 	manifest, err := BuildManifest("example.txt", bytes.NewReader(payload), 8)
 	if err != nil {
@@ -27,6 +27,11 @@ func TestPayloadOfferDecisionAndReceiptValidation(t *testing.T) {
 	decision := PayloadDecision{Version: PayloadProtocolVersion, TransferID: testTransferID, Accepted: true}
 	if err := decision.ValidateFor(offer); err != nil {
 		t.Fatalf("PayloadDecision.ValidateFor() error = %v", err)
+	}
+
+	completion := CompletedPayload(offer)
+	if err := completion.ValidateFor(offer); err != nil {
+		t.Fatalf("PayloadCompletion.ValidateFor() error = %v", err)
 	}
 
 	receipt := VerifiedPayloadReceipt(offer)
@@ -53,7 +58,7 @@ func TestPayloadOfferRejectsInvalidTransferIdentityAndKind(t *testing.T) {
 	}
 }
 
-func TestPayloadDecisionAndReceiptAreBoundToOffer(t *testing.T) {
+func TestPayloadControlRecordsAreBoundToOffer(t *testing.T) {
 	manifest, err := BuildManifest("bound.bin", bytes.NewReader([]byte("payload")), DefaultChunkSize)
 	if err != nil {
 		t.Fatalf("BuildManifest() error = %v", err)
@@ -63,6 +68,12 @@ func TestPayloadDecisionAndReceiptAreBoundToOffer(t *testing.T) {
 	otherID := "ffeeddccbbaa99887766554433221100"
 	if err := (PayloadDecision{Version: PayloadProtocolVersion, TransferID: otherID, Accepted: true}).ValidateFor(offer); err == nil {
 		t.Fatal("PayloadDecision.ValidateFor() accepted another transfer ID")
+	}
+
+	completion := CompletedPayload(offer)
+	completion.Size++
+	if err := completion.ValidateFor(offer); err == nil {
+		t.Fatal("PayloadCompletion.ValidateFor() accepted another payload size")
 	}
 
 	receipt := VerifiedPayloadReceipt(offer)
