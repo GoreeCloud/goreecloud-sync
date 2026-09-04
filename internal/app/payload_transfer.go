@@ -34,7 +34,8 @@ func (f SecurePeerFactory) SendTransferPayload(peer *transport.PeerConn, offer t
 }
 
 // ReceiveTransferPayload revalidates durable trust before entering the receive
-// operation and before each verified chunk is written to the caller's staging
+// operation, again immediately before the application authorizes the offered
+// transfer, and before each verified chunk is written to the caller's staging
 // destination. The caller-supplied authorizer remains mandatory and independent
 // of transport/device trust.
 func (f SecurePeerFactory) ReceiveTransferPayload(peer *transport.PeerConn, authorize transport.PayloadAuthorizer, destination io.Writer) (transfer.PayloadOffer, transfer.PayloadReceipt, error) {
@@ -47,7 +48,13 @@ func (f SecurePeerFactory) ReceiveTransferPayload(peer *transport.PeerConn, auth
 	if err := f.RevalidatePeer(peer); err != nil {
 		return transfer.PayloadOffer{}, transfer.PayloadReceipt{}, err
 	}
-	offer, receipt, err := peer.ReceiveTransferPayload(authorize, currentTrustWriter{factory: f, peer: peer, destination: destination})
+	guardedAuthorize := func(offer transfer.PayloadOffer) error {
+		if err := f.RevalidatePeer(peer); err != nil {
+			return err
+		}
+		return authorize(offer)
+	}
+	offer, receipt, err := peer.ReceiveTransferPayload(guardedAuthorize, currentTrustWriter{factory: f, peer: peer, destination: destination})
 	if err != nil {
 		return offer, transfer.PayloadReceipt{}, err
 	}
