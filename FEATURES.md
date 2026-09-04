@@ -17,6 +17,8 @@ This file distinguishes implemented repository capability from partial developme
 
 - Pre-stabilization `GC-SYNC/1` capability handshakes.
 - Bounded length-prefixed control framing with a 1 MiB hard limit and fail-closed malformed/truncated/unknown-field/trailing-value handling.
+- Bounded binary payload framing with a 1 MiB global ceiling and caller-supplied expected-chunk allocation bound.
+- Frame writers retry valid partial writes and fail on zero-progress writes rather than silently truncating a frame.
 - Context-bound raw TCP peer transport helpers that do not imply authentication.
 - TLS 1.3-only mutually authenticated secure-peer dial/accept wrappers for already-trusted devices.
 - Short-lived self-signed Ed25519 certificates used only as TLS key-possession carriers; trust is based on exact expected device ID and raw Ed25519 public-key pinning rather than Web PKI or network location.
@@ -42,16 +44,27 @@ This file distinguishes implemented repository capability from partial developme
 - Binding of the admitted trusted public-key fingerprint to the authenticated `PeerConn`.
 - Explicit `RevalidatePeer` checkpoint that rechecks the exact account/device/fingerprint against current trusted-device state and closes the local peer when trust is revoked, replaced, missing, corrupt, or unreadable.
 - `RunWithCurrentTrust` operation guard that performs that current-trust check immediately before invoking a protected peer operation and never invokes the callback when trust is no longer current.
+- Bounded `RunOperationSequenceWithCurrentTrust` orchestration for up to 64 validated callbacks with a fresh current-trust checkpoint before every step.
+- Payload-transfer application composition that revalidates current trust before transfer start, before sender source reads, before receiver staging writes, and before returning verified success.
 - Idempotent local peer close state for fail-closed session retirement.
 
-### Transfer integrity foundations
+### Transfer and integrity foundations
 
 - Versioned single-file transfer manifests with deterministic ordered chunk metadata.
 - Streaming manifest construction with SHA-256 digests for each chunk and the complete payload.
 - Structural manifest validation for version, filename, declared size, ordered chunk indexes, chunk sizing, and canonical lowercase SHA-256 metadata.
-- A current Development chunk-size bound of 1 MiB for the manifest/verification path.
+- A current Development chunk-size bound of 1 MiB for the manifest/verification and binary-frame path.
 - Per-chunk integrity verification before acceptance.
 - Whole-payload verification that rejects corruption, truncation, and undeclared trailing bytes before completion can be accepted by higher-level code.
+- Versioned one-to-one payload offers for file and text transfers.
+- Cryptographically random 128-bit transfer identifiers encoded as canonical lowercase hexadecimal.
+- Explicit receiver accept/reject decision before any payload bytes are transmitted.
+- Sender completion and receiver verified-receipt records bound to the exact transfer ID, declared byte size, and whole-payload digest.
+- Secure payload transfer requires a TLS-authenticated `PeerConn` with a durable trusted-device fingerprint bound by the application trust layer; raw or merely unbound peer sessions fail closed.
+- Source chunks are verified against the manifest before transmission.
+- Received chunks are verified before they are written to the caller-provided staging destination.
+- Protocol, framing, stream, staging-write, and integrity failures close the peer fail-closed rather than continuing on a potentially desynchronized connection.
+- Explicit staging semantics: a receiver must not publish or commit partial content until verified success is returned.
 
 ### First-party application record replication foundations
 
@@ -71,13 +84,14 @@ This file distinguishes implemented repository capability from partial developme
 
 ## Partial or development-only features
 
-- The default `serve` command exposes the base development service and does not by itself wire the complete replication, account, trusted-device, or secure-peer runtime composition.
-- Pairing, challenge consumption, trust authorization, revocation, secure admission, explicit revalidation, and the operation guard exist as source foundations but do not yet provide complete user-facing trust administration.
-- `RunWithCurrentTrust` is invoked explicitly by higher-level code; the repository does not yet choose production operation/lifecycle checkpoints, schedule periodic checks, or automatically terminate every live session at the instant trust changes.
+- The default `serve` command exposes the base development service and does not by itself wire the complete replication, account, trusted-device, secure-peer, or payload-transfer runtime composition.
+- Pairing, challenge consumption, trust authorization, revocation, secure admission, explicit revalidation, operation guards, and payload-transfer trust checkpoints exist as source foundations but do not yet provide complete user-facing trust administration.
+- Trust revalidation is checkpoint-based; the repository does not yet choose a complete production cadence, run a background revocation monitor, or guarantee instantaneous termination of an operation already running after a successful checkpoint.
 - Production secure listener/dial orchestration, discovery/address policy, reconnect behavior, and complete session lifecycle remain incomplete.
 - Raw TCP peer helpers remain intentionally unauthenticated lower-level primitives.
 - Account-scoped trusted-device state is durable locally, but production multi-user identity/account authority remains incomplete.
-- Transfer manifests and integrity verification exist as source primitives, but they are not yet wired into a complete authenticated one-to-one file/text transfer, durable resume store, folder-sync engine, or production runtime.
+- Authenticated one-to-one file/text payload movement now exists as a bounded source primitive, but it is not yet wired into the default runtime, durable resume persistence, final filesystem path authorization/confinement, transfer history/progress/rate controls, user-facing Nearby workflows, or a folder-sync engine.
+- The current random transfer identifier and ordered stream contract do not establish the broader production replay/freshness policy still required for transfer operations.
 - First-party application-record replication handlers are not a complete folder synchronization engine or production deployment claim.
 - Privacy Shield and Wardveil decision boundaries exist in source, but complete production integration and acceptance evidence remain pending.
 
@@ -103,8 +117,8 @@ This file distinguishes implemented repository capability from partial developme
 
 - LAN discovery.
 - User-facing QR pairing and optional confirmation workflows.
-- File and folder transfer.
-- Text, URL, and clipboard transfer.
+- User-facing file and folder transfer workflows using the approved transfer engine.
+- Text, URL, and clipboard transfer experiences.
 - Drag and drop.
 - Android share-sheet integration.
 - Favorite devices and user-facing trust management.
@@ -137,10 +151,10 @@ This file distinguishes implemented repository capability from partial developme
 - Explicit folder ACLs and multi-user isolation tests.
 - Read, write, contribute, receive-only, drop-only, and administrative grants.
 - Audit events and administrative activity views.
-- Transfer history.
+- Transfer history, progress, cancellation, prioritization, quotas, and rate controls.
 - Migration Mode and drop folders.
 - Glaze UI web administration and accessibility acceptance.
 - Native Android client and Debian packaging.
 - GoreeCloud Mesh coordination, GoreeCloud Network reachability, Notify, Manager, Photos, Drive, Search, API, Wardveil Security, Privacy Shield, Everkeep, and broader GoreeCloud Identity integrations as applicable.
-- Broader transport/session replay and freshness policy beyond implemented TLS and pairing-challenge boundaries.
+- Broader transport/session/transfer replay and freshness policy beyond implemented TLS, random transfer identifiers, and pairing-challenge boundaries.
 - Production monitoring, deployment, migration/rollback, storage, and Stable acceptance evidence.
