@@ -109,8 +109,11 @@ func (m Manifest) Validate() error {
 		return fmt.Errorf("non-empty payload manifest requires chunks")
 	}
 
-	expectedChunks := int((m.Size + int64(m.ChunkSize) - 1) / int64(m.ChunkSize))
-	if len(m.Chunks) != expectedChunks {
+	expectedChunks := m.Size / int64(m.ChunkSize)
+	if m.Size%int64(m.ChunkSize) != 0 {
+		expectedChunks++
+	}
+	if int64(len(m.Chunks)) != expectedChunks {
 		return fmt.Errorf("manifest chunk count %d does not match expected %d", len(m.Chunks), expectedChunks)
 	}
 
