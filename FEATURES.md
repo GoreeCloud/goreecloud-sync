@@ -44,6 +44,15 @@ This file distinguishes implemented repository capability from partial developme
 - `RunWithCurrentTrust` operation guard that performs that current-trust check immediately before invoking a protected peer operation and never invokes the callback when trust is no longer current.
 - Idempotent local peer close state for fail-closed session retirement.
 
+### Transfer integrity foundations
+
+- Versioned single-file transfer manifests with deterministic ordered chunk metadata.
+- Streaming manifest construction with SHA-256 digests for each chunk and the complete payload.
+- Structural manifest validation for version, filename, declared size, ordered chunk indexes, chunk sizing, and canonical lowercase SHA-256 metadata.
+- A current Development chunk-size bound of 1 MiB for the manifest/verification path.
+- Per-chunk integrity verification before acceptance.
+- Whole-payload verification that rejects corruption, truncation, and undeclared trailing bytes before completion can be accepted by higher-level code.
+
 ### First-party application record replication foundations
 
 - Dataset capability negotiation for GoreeCloud Browser, Search, and Bookmarks.
@@ -68,6 +77,7 @@ This file distinguishes implemented repository capability from partial developme
 - Production secure listener/dial orchestration, discovery/address policy, reconnect behavior, and complete session lifecycle remain incomplete.
 - Raw TCP peer helpers remain intentionally unauthenticated lower-level primitives.
 - Account-scoped trusted-device state is durable locally, but production multi-user identity/account authority remains incomplete.
+- Transfer manifests and integrity verification exist as source primitives, but they are not yet wired into a complete authenticated one-to-one file/text transfer, durable resume store, folder-sync engine, or production runtime.
 - First-party application-record replication handlers are not a complete folder synchronization engine or production deployment claim.
 - Privacy Shield and Wardveil decision boundaries exist in source, but complete production integration and acceptance evidence remain pending.
 
