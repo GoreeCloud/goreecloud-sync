@@ -122,6 +122,12 @@ func (p *PeerConn) ReceiveTransferPayload(authorize PayloadAuthorizer, destinati
 	}
 
 	if err := authorize(offer); err != nil {
+		// A trust-aware authorizer may deliberately close the peer while rejecting
+		// stale authorization. Preserve that failure rather than attempting to send
+		// a policy rejection over a connection that has already failed closed.
+		if p.IsClosed() {
+			return offer, transfer.PayloadReceipt{}, err
+		}
 		decision := transfer.PayloadDecision{
 			Version:    transfer.PayloadProtocolVersion,
 			TransferID: offer.TransferID,
