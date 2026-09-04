@@ -24,6 +24,8 @@ The repository has advanced beyond its original Milestone 0 shell. Current sourc
 - durable account-scoped trusted-device authorization with explicit revocation, active-key replacement protection, and stored key/fingerprint validation;
 - fail-closed trusted peer resolution that requires the authenticated device ID and key fingerprint to remain authorized for the configured account;
 - an application-layer secure-peer factory that resolves the current account-scoped trusted remote device and hardened protected local device identity immediately before secure dial/accept, binds the admitted durable key fingerprint to the authenticated connection, and can explicitly revalidate that exact account/device/fingerprint against current trust state before continued session use;
+- `RunWithCurrentTrust` and bounded `RunOperationSequenceWithCurrentTrust` orchestration helpers that revalidate current account/device/key trust immediately before protected operations and stop later operations when trust ceases to be current between checkpoints;
+- versioned single-file transfer manifests built by streaming payloads, with ordered per-chunk and whole-payload SHA-256 integrity metadata, a current 1 MiB chunk bound, and fail-closed corruption, truncation, malformed-metadata, and undeclared-trailing-data verification;
 - first-party dataset capability negotiation for GoreeCloud Browser, Search, and Bookmarks;
 - transport-neutral versioned record envelopes, deterministic conflict resolution, and payload-free tombstones;
 - authenticated peer/session boundaries plus Privacy Shield and Wardveil decision interfaces before durable record acceptance;
@@ -31,7 +33,7 @@ The repository has advanced beyond its original Milestone 0 shell. Current sourc
 - record-bound proof, replay/high-water, observation-receipt, tombstone-convergence, and protected device-key lifecycle foundations;
 - bounded authenticated retrieval with deterministic record-ID cursor pagination.
 
-These are source and development contracts. They do **not** establish a complete production synchronization product. The default development service is not a production deployment, and Sync routes are registered only when the service is constructed with the required replication ingestor and authenticated peer resolver. Source includes secure peer admission and an explicit trust-revalidation checkpoint, but the default `serve` command does not enable secure peer listeners/dials, discovery/address selection, reconnect policy, periodic/per-operation revalidation, or automatic asynchronous termination the instant trust changes.
+These are source and development contracts. They do **not** establish a complete production synchronization product. The default development service is not a production deployment, and Sync routes are registered only when the service is constructed with the required replication ingestor and authenticated peer resolver. Source includes secure peer admission, explicit trust-revalidation checkpoints, guarded bounded operation sequences, and transfer-integrity primitives, but the default `serve` command does not enable secure peer listeners/dials, discovery/address selection, reconnect policy, production revalidation scheduling/background monitoring, authenticated file/text payload transfer, or durable resume state.
 
 No Stable or production-readiness claim should be inferred from repository source, passing CI, or the presence of these foundations.
 
@@ -92,11 +94,21 @@ curl http://127.0.0.1:8787/api/v1/status
 
 Higher-level runtime code can call `RevalidatePeer` at an operation or lifecycle checkpoint. The check compares the connection's authenticated device ID and bound fingerprint with the current account-scoped trusted-device store. Revoked, replaced, missing, corrupt, or unreadable trust fails closed and closes the local connection.
 
-This is not a background revocation daemon. A session remains subject to runtime orchestration choosing appropriate revalidation points and reconnect policy; the repository does not claim that every established connection is terminated at the exact instant an administrator changes trust state.
+`RunWithCurrentTrust` wraps one protected peer operation with that current-trust check. `RunOperationSequenceWithCurrentTrust` applies the same guard before every operation in a validated finite sequence of up to 64 operations, so revocation or other trust failure between steps prevents later callbacks from running.
+
+These are checkpoint-based controls, not a background revocation daemon. A session remains subject to runtime orchestration choosing appropriate checkpoints and reconnect policy; the repository does not claim that every established connection is terminated at the exact instant an administrator changes trust state, and an operation already running after its pre-operation checkpoint cannot be retroactively stopped by these helpers.
+
+## Transfer integrity foundation
+
+`internal/transfer` now provides a Development-stage versioned manifest for one file. Manifest construction streams the source payload, records its exact byte size and configured chunk size, and stores canonical lowercase SHA-256 digests for every ordered chunk and the complete payload.
+
+Manifest validation requires contiguous zero-based chunk indexes, exact byte accounting, bounded chunk sizes, valid canonical digests, and the defined empty-payload representation. `VerifyPayload` reads exactly the declared chunks, verifies every chunk before contributing it to final-payload verification, rejects truncation and undeclared trailing bytes, and then verifies the whole-payload digest.
+
+This integrity layer is not yet a transfer runtime. It does not itself send payload data across `PeerConn`, persist resumable progress, authorize destination paths, or establish a production file/folder synchronization workflow.
 
 ## Still incomplete
 
-Major production and product work remains, including enabling the secure-peer factory in an approved runtime with discovery/address and listener/dial policy, selecting revalidation checkpoints, secure-session lifecycle management and revocation-aware reconnect behavior, broader transport/session replay and freshness policy beyond TLS and the implemented one-time pairing challenge, production account/runtime wiring, user-facing pairing approval and revocation UX, LAN discovery, complete resumable file/folder synchronization, Nearby, Share E2EE, complete multi-user authorization and administration, Glaze UI product surfaces, Android and Debian clients, migration/rollback tooling, monitoring, deployment, and full Glaze UI/Wardveil Security/Privacy Shield/Everkeep/GoreeCloud Mesh/GoreeCloud Identity acceptance evidence appropriate to the final scope.
+Major production and product work remains, including enabling the secure-peer factory in an approved runtime with discovery/address and listener/dial policy, production revalidation scheduling and revocation-aware reconnect/session behavior, broader transport/session replay and freshness policy beyond TLS and the implemented one-time pairing challenge, production account/runtime wiring, user-facing pairing approval and revocation UX, LAN discovery, authenticated one-to-one file/text payload transfer, durable resumable file/folder synchronization, Nearby, Share E2EE, complete multi-user authorization and administration, Glaze UI product surfaces, Android and Debian clients, migration/rollback tooling, monitoring, deployment, and full Glaze UI/Wardveil Security/Privacy Shield/Everkeep/GoreeCloud Mesh/GoreeCloud Identity acceptance evidence appropriate to the final scope.
 
 Syncthing or any other existing service must not be considered replaced merely because GoreeCloud Sync source foundations exist.
 
