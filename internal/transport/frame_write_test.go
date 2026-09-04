@@ -50,7 +50,9 @@ func TestFrameWritersCompleteValidPartialWrites(t *testing.T) {
 }
 
 func TestFrameWritersRejectZeroProgress(t *testing.T) {
-	if err := WriteJSONFrame(zeroProgressWriter{}, struct{ Value string `json:"value"` }{Value: "test"}); err == nil {
+	if err := WriteJSONFrame(zeroProgressWriter{}, struct {
+		Value string `json:"value"`
+	}{Value: "test"}); err == nil {
 		t.Fatal("WriteJSONFrame() accepted a zero-progress writer")
 	}
 	if err := WriteBinaryFrame(zeroProgressWriter{}, []byte("test")); err == nil {
