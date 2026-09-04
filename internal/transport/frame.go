@@ -30,10 +30,10 @@ func WriteJSONFrame(w io.Writer, value any) error {
 
 	var header [4]byte
 	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
-	if _, err := w.Write(header[:]); err != nil {
+	if err := writeFrameBytes(w, header[:]); err != nil {
 		return fmt.Errorf("write frame header: %w", err)
 	}
-	if _, err := w.Write(payload); err != nil {
+	if err := writeFrameBytes(w, payload); err != nil {
 		return fmt.Errorf("write frame payload: %w", err)
 	}
 	return nil
