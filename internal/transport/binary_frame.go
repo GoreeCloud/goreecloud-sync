@@ -19,10 +19,10 @@ func WriteBinaryFrame(w io.Writer, payload []byte) error {
 
 	var header [4]byte
 	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
-	if _, err := w.Write(header[:]); err != nil {
+	if err := writeFrameBytes(w, header[:]); err != nil {
 		return fmt.Errorf("write binary frame header: %w", err)
 	}
-	if _, err := w.Write(payload); err != nil {
+	if err := writeFrameBytes(w, payload); err != nil {
 		return fmt.Errorf("write binary frame payload: %w", err)
 	}
 	return nil
@@ -52,4 +52,20 @@ func ReadBinaryFrame(r io.Reader, maxSize int) ([]byte, error) {
 		return nil, fmt.Errorf("read binary frame payload: %w", err)
 	}
 	return payload, nil
+}
+
+func writeFrameBytes(w io.Writer, data []byte) error {
+	for len(data) > 0 {
+		n, err := w.Write(data)
+		if n > 0 {
+			data = data[n:]
+		}
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return io.ErrShortWrite
+		}
+	}
+	return nil
 }
