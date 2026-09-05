@@ -33,6 +33,23 @@ func TestBuildManifestAndVerifyPayload(t *testing.T) {
 	}
 }
 
+func TestBuildManifestRejectsPathBearingFilenames(t *testing.T) {
+	for _, filename := range []string{
+		"../secret.txt",
+		"folder/report.txt",
+		`folder\report.txt`,
+		"/tmp/report.txt",
+		".",
+		"..",
+	} {
+		t.Run(filename, func(t *testing.T) {
+			if _, err := BuildManifest(filename, bytes.NewReader([]byte("data")), DefaultChunkSize); err == nil {
+				t.Fatalf("BuildManifest(%q) accepted a path-bearing or traversal filename", filename)
+			}
+		})
+	}
+}
+
 func TestVerifyPayloadRejectsCorruption(t *testing.T) {
 	payload := bytes.Repeat([]byte("a"), DefaultChunkSize+128)
 	manifest, err := BuildManifest("corrupt.bin", bytes.NewReader(payload), DefaultChunkSize)
