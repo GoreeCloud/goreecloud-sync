@@ -248,7 +248,7 @@ func TestRestoreFailureAbortsBeforeResume(t *testing.T) {
 func TestReconcileFailureAbortsBeforeResume(t *testing.T) {
 	reconcileErr := errors.New("reconciliation failed")
 	runtime := &fakeRestoreRuntime{
-		lease: RestoreLease{LeaseID: "lease-1", TargetID: "browser-state", StagingID: "stage-1"},
+		lease:     RestoreLease{LeaseID: "lease-1", TargetID: "browser-state", StagingID: "stage-1"},
 		commitErr: reconcileErr,
 	}
 	coordinator := BackupSyncCoordinator{Restore: runtime}
