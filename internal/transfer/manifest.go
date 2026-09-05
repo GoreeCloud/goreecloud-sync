@@ -205,6 +205,12 @@ func validateFilename(filename string) error {
 	if strings.ContainsRune(filename, '\x00') {
 		return fmt.Errorf("manifest filename contains a NUL byte")
 	}
+	if filename == "." || filename == ".." {
+		return fmt.Errorf("manifest filename must be a path-independent leaf name")
+	}
+	if strings.ContainsAny(filename, `/\\`) {
+		return fmt.Errorf("manifest filename must not contain path separators")
+	}
 	return nil
 }
 
