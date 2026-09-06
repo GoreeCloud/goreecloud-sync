@@ -65,6 +65,8 @@ After staging succeeds, Sync performs `CommitAndReconcile`. Publication/reconcil
 
 If staging or reconciliation fails, Sync requests abort cleanup. Resume is attempted for every successfully begun lease, including failure paths.
 
+Once a restore lease has begun, cancellation of the original request context does not by itself suppress Sync-owned cleanup. `AbortRestore` and `Resume` each receive a fresh cleanup context that preserves parent context values while detaching cancellation/deadline propagation and imposing a separate current Development ceiling of five seconds per cleanup operation. This is bounded in-process cleanup only; it does not provide crash/restart lease recovery, durable cleanup journaling, or a guarantee that a runtime implementation will successfully finish cleanup.
+
 ## Graceful unavailability
 
 The contract distinguishes service absence from successful protection or successful restore:
@@ -93,6 +95,6 @@ Before this relationship can be described as production-ready, GoreeCloud still 
 - real Backup protection/checkpoint implementation wiring;
 - real Sync pause/maintenance/staging/reconciliation runtime wiring;
 - restore conflict and rollback policy for each supported Sync-managed dataset;
-- crash/restart recovery for interrupted restore leases;
+- crash/restart recovery and durable reconciliation for interrupted restore leases beyond the bounded in-process cancellation cleanup implemented here;
 - operational observability without sensitive payload leakage;
 - target-environment tests, failure injection, recovery drills, and production acceptance evidence.
