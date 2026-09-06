@@ -46,6 +46,11 @@ type fakeRestoreRuntime struct {
 	abortErr  error
 	resumeErr error
 
+	abortContextErr   error
+	resumeContextErr  error
+	abortHasDeadline  bool
+	resumeHasDeadline bool
+
 	calls []string
 }
 
@@ -59,13 +64,17 @@ func (f *fakeRestoreRuntime) CommitAndReconcile(context.Context, RestoreLease) e
 	return f.commitErr
 }
 
-func (f *fakeRestoreRuntime) AbortRestore(context.Context, RestoreLease) error {
+func (f *fakeRestoreRuntime) AbortRestore(ctx context.Context, _ RestoreLease) error {
 	f.calls = append(f.calls, "abort")
+	f.abortContextErr = ctx.Err()
+	_, f.abortHasDeadline = ctx.Deadline()
 	return f.abortErr
 }
 
-func (f *fakeRestoreRuntime) Resume(context.Context, RestoreLease) error {
+func (f *fakeRestoreRuntime) Resume(ctx context.Context, _ RestoreLease) error {
 	f.calls = append(f.calls, "resume")
+	f.resumeContextErr = ctx.Err()
+	_, f.resumeHasDeadline = ctx.Deadline()
 	return f.resumeErr
 }
 
@@ -218,6 +227,9 @@ func TestRestoreIntoManagedTargetStagesCommitsReconcilesAndResumes(t *testing.T)
 	if !reflect.DeepEqual(runtime.calls, wantCalls) {
 		t.Fatalf("restore call order = %v, want %v", runtime.calls, wantCalls)
 	}
+	if runtime.resumeContextErr != nil || !runtime.resumeHasDeadline {
+		t.Fatalf("resume cleanup context must be live and bounded; err=%v deadline=%v", runtime.resumeContextErr, runtime.resumeHasDeadline)
+	}
 }
 
 func TestRestoreFailureAbortsBeforeResume(t *testing.T) {
@@ -242,6 +254,38 @@ func TestRestoreFailureAbortsBeforeResume(t *testing.T) {
 	wantCalls := []string{"begin", "abort", "resume"}
 	if !reflect.DeepEqual(runtime.calls, wantCalls) {
 		t.Fatalf("restore call order = %v, want %v", runtime.calls, wantCalls)
+	}
+}
+
+func TestRestoreCancellationStillUsesLiveBoundedCleanupContexts(t *testing.T) {
+	runtime := &fakeRestoreRuntime{lease: RestoreLease{
+		LeaseID:   "lease-1",
+		TargetID:  "browser-state",
+		StagingID: "stage-1",
+	}}
+	coordinator := BackupSyncCoordinator{Restore: runtime}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	err := coordinator.RestoreIntoManagedTarget(ctx, RestoreRequest{
+		AccountID:   "acct-1",
+		TargetID:    "browser-state",
+		OperationID: "restore-cancelled",
+	}, func(context.Context, RestoreLease) error {
+		cancel()
+		return context.Canceled
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected cancellation error, got %v", err)
+	}
+	wantCalls := []string{"begin", "abort", "resume"}
+	if !reflect.DeepEqual(runtime.calls, wantCalls) {
+		t.Fatalf("restore call order = %v, want %v", runtime.calls, wantCalls)
+	}
+	if runtime.abortContextErr != nil || !runtime.abortHasDeadline {
+		t.Fatalf("abort cleanup context must outlive caller cancellation and remain bounded; err=%v deadline=%v", runtime.abortContextErr, runtime.abortHasDeadline)
+	}
+	if runtime.resumeContextErr != nil || !runtime.resumeHasDeadline {
+		t.Fatalf("resume cleanup context must outlive caller cancellation and remain bounded; err=%v deadline=%v", runtime.resumeContextErr, runtime.resumeHasDeadline)
 	}
 }
 
