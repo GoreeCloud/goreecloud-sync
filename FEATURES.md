@@ -79,6 +79,7 @@ This file distinguishes implemented repository capability from partial developme
 - Sync runtime restore leases own target authorization, pause/maintenance state, isolated staging, reconciliation/publication, abort cleanup, and resume.
 - Wrong-target or malformed restore leases fail closed before restore execution.
 - Failed staging or reconciliation requests abort cleanup, and resume is attempted for every begun restore lease.
+- Once a restore lease begins, request cancellation cannot by itself suppress abort/resume cleanup: each cleanup call receives a fresh cancellation-detached context with a separate five-second Development timeout.
 
 See `docs/BACKUP-INTEGRATION.md` for the explicit authority and lifecycle boundary.
 
@@ -108,7 +109,7 @@ See `docs/BACKUP-INTEGRATION.md` for the explicit authority and lifecycle bounda
 - Account-scoped trusted-device state is durable locally, but production multi-user identity/account authority remains incomplete.
 - Authenticated one-to-one file/text payload movement exists as a bounded source primitive, but it is not yet wired into the default runtime, durable resume persistence, final filesystem path authorization/confinement, transfer history/progress/rate controls, user-facing Nearby workflows, or a folder-sync engine.
 - The current random transfer identifier and ordered stream contract do not establish the broader production replay/freshness policy still required for transfer operations.
-- Backup coordination is a transport-neutral source contract only. Live Backup transport, Identity/policy authorization, concrete Sync restore runtime wiring, interrupted-restore recovery, target-environment validation, and production acceptance remain pending.
+- Backup coordination is a transport-neutral source contract only. It now protects in-process abort/resume cleanup from request cancellation with bounded cleanup contexts, but live Backup transport, Identity/policy authorization, concrete Sync restore runtime wiring, process-crash/restart recovery, durable restore-lease reconciliation, target-environment validation, and production acceptance remain pending.
 - First-party application-record replication handlers are not a complete folder synchronization engine or production deployment claim.
 - Privacy Shield and Wardveil decision boundaries exist in source, but complete production integration and acceptance evidence remain pending.
 
