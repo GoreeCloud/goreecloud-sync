@@ -10,6 +10,8 @@ import (
 
 var ErrBackupUnavailable = errors.New("backup service unavailable")
 
+const restoreCleanupTimeout = 5 * time.Second
+
 // BackupProtectionState is descriptive evidence supplied by the Backup
 // authority. Sync may present or use this state for orchestration decisions, but
 // it must not reinterpret the state as Sync authorization or delete Backup data.
@@ -181,8 +183,9 @@ func (c BackupSyncCoordinator) CheckpointBeforeChange(ctx context.Context, reque
 // RestoreIntoManagedTarget coordinates a restore into an already-authorized
 // Sync-managed logical target. Restore bytes are written only through an opaque
 // staging identifier issued by the Sync runtime. Publication happens only after
-// successful staging and Sync-owned reconciliation. Resume is attempted on every
-// begun lease, including failures.
+// successful staging and Sync-owned reconciliation. Once a lease has begun,
+// abort and resume cleanup each receive their own bounded cleanup context that
+// survives cancellation of the caller's request context.
 func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, request RestoreRequest, restore func(context.Context, RestoreLease) error) (err error) {
 	if err := validateRestoreRequest(request); err != nil {
 		return err
@@ -199,22 +202,41 @@ func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, req
 		return err
 	}
 	if err := validateRestoreLease(request, lease); err != nil {
-		abortErr := c.Restore.AbortRestore(ctx, lease)
-		resumeErr := c.Restore.Resume(ctx, lease)
+		abortErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
+			return c.Restore.AbortRestore(cleanupCtx, lease)
+		})
+		resumeErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
+			return c.Restore.Resume(cleanupCtx, lease)
+		})
 		return errors.Join(err, abortErr, resumeErr)
 	}
 
 	defer func() {
-		err = errors.Join(err, c.Restore.Resume(ctx, lease))
+		resumeErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
+			return c.Restore.Resume(cleanupCtx, lease)
+		})
+		err = errors.Join(err, resumeErr)
 	}()
 
 	if err := restore(ctx, lease); err != nil {
-		return errors.Join(err, c.Restore.AbortRestore(ctx, lease))
+		abortErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
+			return c.Restore.AbortRestore(cleanupCtx, lease)
+		})
+		return errors.Join(err, abortErr)
 	}
 	if err := c.Restore.CommitAndReconcile(ctx, lease); err != nil {
-		return errors.Join(err, c.Restore.AbortRestore(ctx, lease))
+		abortErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
+			return c.Restore.AbortRestore(cleanupCtx, lease)
+		})
+		return errors.Join(err, abortErr)
 	}
 	return nil
+}
+
+func runRestoreCleanup(parent context.Context, operation func(context.Context) error) error {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(parent), restoreCleanupTimeout)
+	defer cancel()
+	return operation(cleanupCtx)
 }
 
 func validateBackupCheckpointRequest(request BackupCheckpointRequest) error {
