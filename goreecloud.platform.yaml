@@ -1,0 +1,155 @@
+schema_version: '0.2'
+
+component:
+  type: application
+  id: goreecloud-sync
+  product_name: GoreeCloud Sync
+  repository: GoreeCloud/goreecloud-sync
+
+lifecycle: development
+version: unreleased-development
+
+supported_platforms:
+  - linux
+
+api:
+  versions:
+    - v1
+  endpoints:
+    - name: health
+      url: /healthz
+      purpose: Development process-health endpoint for the loopback-safe service.
+    - name: status
+      url: /api/v1/status
+      purpose: Development service and capability status without production-readiness claims.
+    - name: search-history-sync
+      url: /api/v1/sync/search/history
+      purpose: Conditional authenticated Development replication endpoint for the Search-owned search.history dataset when the service is constructed with the required ingestor and authenticated peer resolver.
+    - name: bookmarks-items-sync
+      url: /api/v1/sync/bookmarks/items
+      purpose: Conditional authenticated Development replication endpoint for the Bookmarks-owned bookmarks.items dataset when the service is constructed with the required ingestor and authenticated peer resolver.
+    - name: browser-tabs-sync
+      url: /api/v1/sync/browser/tabs
+      purpose: Conditional authenticated Development replication endpoint for the Browser-owned browser.tabs dataset when the service is constructed with the required ingestor and authenticated peer resolver.
+    - name: browser-history-sync
+      url: /api/v1/sync/browser/history
+      purpose: Conditional authenticated Development replication endpoint for the Browser-owned browser.history dataset when the service is constructed with the required ingestor and authenticated peer resolver.
+
+platform_systems:
+  manager:
+    result: applicable-blocked
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+    notes: GoreeCloud Manager operational visibility is applicable, but Sync exposes no accepted readiness interface, Manager registration, production telemetry, or operational-status integration.
+  privacy_shield:
+    result: applicable-blocked
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+    notes: Sync source defines Privacy Shield-facing acceptance and minimization boundaries before durable record acceptance, but producer-authoritative runtime decisions, user controls, and production privacy acceptance remain incomplete.
+  wardveil_security:
+    result: applicable-blocked
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+    notes: Sync source has fail-closed trust, peer-admission, transfer-authorization, framing, and integrity controls plus Wardveil-facing decision boundaries, but accepted producer-authoritative Wardveil runtime evidence and production security acceptance remain incomplete.
+  everkeep:
+    result: applicable-blocked
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+    notes: Sync explicitly does not become a backup authority. Everkeep remains authoritative for backup, preservation, and recovery; accepted Sync-owned continuity scope, backup/restore policy, and production recovery evidence remain incomplete.
+  glaze_ui:
+    result: applicable-blocked
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+    notes: User-facing Sync administration and client surfaces remain pending. Any implemented Browser, Android, Debian, or other GoreeCloud-owned presentation must adopt the current Stable Glaze UI baseline and complete product-specific acceptance before release eligibility.
+  mesh:
+    result: applicable-blocked
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+    notes: Cross-application dataset negotiation is versioned in source, but accepted GoreeCloud Mesh registration, discovery, dependency/event coordination, transport, and runtime evidence remain incomplete.
+    capabilities: []
+    dependencies: []
+    published_events: []
+    consumed_events: []
+  identity:
+    result: applicable-blocked
+    version: null
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+    notes: Device identities, pairing proofs, account-scoped trusted-device state, secure-peer composition, and explicit revalidation exist as Sync-local Development foundations, but accepted GoreeCloud Identity account/session/authorization integration and production runtime evidence remain incomplete.
+
+health:
+  health_endpoint: /healthz
+  readiness_endpoint: null
+
+continuity:
+  backup:
+    required: true
+    requirements:
+      - Protect approved Sync-owned durable configuration, trusted-device relationships, and replication/control metadata through the accepted Everkeep recovery model without treating synchronized payload duplicates as backup evidence.
+      - Exclude device private keys, reusable credentials, private transfer contents, and other secret material from ordinary backup payloads unless an explicitly protected recovery mechanism requires and authorizes them.
+  restore:
+    required: true
+    requirements:
+      - Validate restoration of approved Sync-owned durable state into an isolated environment before Stable or production acceptance.
+      - Preserve Sync authority over target authorization, maintenance or pause state, isolated staging, reconciliation, deliberate publication, abort cleanup, and resume when restoration affects Sync-managed paths.
+  export:
+    required: true
+    requirements:
+      - Provide documented user-controlled export for portable Sync-owned configuration and user-visible synchronization relationships or metadata where appropriate.
+      - Exclude device private keys, reusable credentials, private transfer payloads, Wardveil trust evidence, and unrelated producer-owned application data from ordinary exports.
+  portability:
+    required: true
+    requirements:
+      - Keep Sync-owned protocol, record, trust, and configuration data in documented versioned formats with explicit migration behavior.
+      - Preserve originating application authority and dataset semantics when moving portable Sync-owned state between supported environments.
+
+external_dependencies: []
+
+compatibility:
+  platform_contract: '0.2'
+  glaze_ui_required: '1.1.0'
+  requires:
+    - goreecloud-platform-contract==0.2
+    - glaze-ui==1.1.0
+  provides:
+    - sync-api-v1
+    - sync-record-contract-v1
+
+evidence:
+  acceptance_tests: []
+  release: []
+
+conformance:
+  status: nonconformant
+  validated_at: null
+  evidence:
+    - README.md
+    - SPECIFICATIONS.md
+    - docs/architecture.md
+    - docs/security-model.md
+  blockers:
+    - GoreeCloud Manager operational integration, accepted readiness, monitoring, and production observability are incomplete.
+    - Producer-authoritative Privacy Shield runtime decisions, user controls, and production privacy acceptance are incomplete.
+    - Producer-authoritative Wardveil Security runtime evidence and production security acceptance are incomplete.
+    - Everkeep backup, restore, recovery, migration, rollback, and accepted Sync-owned continuity scope are incomplete; synchronization itself must not be treated as backup.
+    - No user-facing current-Stable Glaze UI administration or client surface has completed source, rendered, accessibility, form-factor, or production acceptance.
+    - GoreeCloud Mesh registration, discovery, dependency/event coordination, transport, and runtime acceptance are incomplete.
+    - GoreeCloud Identity account, session, authorization, device-recovery, and production runtime integration are incomplete.
+    - Secure peer admission and authenticated one-to-one payload source primitives are not enabled as an approved production runtime with discovery/address policy, listener/dial orchestration, continuous lifecycle handling, production revalidation scheduling, or revocation-aware reconnect behavior.
+    - Durable resumable file/folder synchronization, filesystem confinement/publication policy, Nearby workflows, Share end-to-end-encrypted product flows, complete multi-user administration, and supported client products remain incomplete.
+    - Backup-to-Sync and Sync-to-Backup authority-boundary source work is not yet an accepted end-to-end authenticated runtime integration with restore staging/reconciliation and target-environment failure-mode evidence.
+    - Production packaging, signing, deployment, migration/cutover, rollback, sustained performance, operational runbooks, and exact release provenance are incomplete.
+    - No Stable or production-approved GoreeCloud Sync release evidence is declared.
