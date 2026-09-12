@@ -116,7 +116,9 @@ type BackupSyncCoordinator struct {
 
 // ProtectionState returns Backup's independent protection state. Backup
 // unavailability is represented explicitly rather than being mistaken for an
-// unprotected or protected state.
+// unprotected or protected state. Available evidence must carry a real,
+// non-future observation time so Sync cannot present undated or future-dated
+// Backup state as current evidence.
 func (c BackupSyncCoordinator) ProtectionState(ctx context.Context, accountID, scopeID string) (BackupProtectionState, error) {
 	if strings.TrimSpace(accountID) == "" {
 		return BackupProtectionState{}, fmt.Errorf("account ID must not be empty")
@@ -138,6 +140,14 @@ func (c BackupSyncCoordinator) ProtectionState(ctx context.Context, accountID, s
 	if !state.Available {
 		state.Protected = false
 		state.LatestCheckpoint = ""
+		state.ObservedAt = time.Time{}
+		return state, nil
+	}
+	if state.ObservedAt.IsZero() {
+		return BackupProtectionState{}, fmt.Errorf("available backup protection state is missing observed time")
+	}
+	if state.ObservedAt.After(time.Now().UTC()) {
+		return BackupProtectionState{}, fmt.Errorf("backup protection state cannot be observed in the future")
 	}
 	return state, nil
 }
@@ -267,6 +277,9 @@ func validateBackupCheckpointRequest(request BackupCheckpointRequest) error {
 func validateBackupCheckpointReceipt(request BackupCheckpointRequest, receipt BackupCheckpointReceipt) error {
 	if strings.TrimSpace(receipt.CheckpointID) == "" || receipt.CreatedAt.IsZero() {
 		return fmt.Errorf("backup returned an invalid checkpoint receipt")
+	}
+	if receipt.CreatedAt.After(time.Now().UTC()) {
+		return fmt.Errorf("backup checkpoint receipt cannot be created in the future")
 	}
 	if receipt.AccountID != request.AccountID {
 		return fmt.Errorf("backup checkpoint receipt account does not match the authorized request")
