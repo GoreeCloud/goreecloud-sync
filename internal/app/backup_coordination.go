@@ -113,7 +113,7 @@ type SyncRestoreRuntime interface {
 }
 
 // SyncRestoreRequestCleanupRuntime is the fail-closed cleanup boundary used when
-// BeginRestore returned an invalid lease. The coordinator must not feed a
+// BeginRestore fails or returns an invalid lease. The coordinator must not feed a
 // foreign or malformed lease back into lease-scoped cleanup operations. A runtime
 // that can safely unwind a partially begun restore without trusting the returned
 // lease may implement these exact request-bound methods.
@@ -219,9 +219,10 @@ func (c BackupSyncCoordinator) CheckpointBeforeChange(ctx context.Context, reque
 // staging identifier issued by the Sync runtime. Publication happens only after
 // successful staging and Sync-owned reconciliation. Once a valid lease has begun,
 // abort and resume cleanup each receive their own bounded cleanup context that
-// survives cancellation of the caller's request context. If BeginRestore returns
-// an invalid lease, lease-scoped cleanup is never called with that untrusted lease;
-// only an optional request-bound cleanup interface may unwind the request.
+// survives cancellation of the caller's request context. If BeginRestore fails
+// or returns an invalid lease, lease-scoped cleanup is never called with any
+// untrusted lease; only an optional request-bound cleanup interface may unwind
+// the exact validated request.
 func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, request RestoreRequest, restore func(context.Context, RestoreLease) error) (err error) {
 	if err := validateRestoreRequest(request); err != nil {
 		return err
@@ -235,20 +236,10 @@ func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, req
 
 	lease, err := c.Restore.BeginRestore(ctx, request)
 	if err != nil {
-		return err
+		return errors.Join(err, c.cleanupRestoreRequest(ctx, request))
 	}
 	if err := validateRestoreLease(request, lease); err != nil {
-		requestCleanup, ok := c.Restore.(SyncRestoreRequestCleanupRuntime)
-		if !ok {
-			return err
-		}
-		abortErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
-			return requestCleanup.AbortRestoreRequest(cleanupCtx, request)
-		})
-		resumeErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
-			return requestCleanup.ResumeRestoreRequest(cleanupCtx, request)
-		})
-		return errors.Join(err, abortErr, resumeErr)
+		return errors.Join(err, c.cleanupRestoreRequest(ctx, request))
 	}
 
 	defer func() {
@@ -271,6 +262,20 @@ func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, req
 		return errors.Join(err, abortErr)
 	}
 	return nil
+}
+
+func (c BackupSyncCoordinator) cleanupRestoreRequest(ctx context.Context, request RestoreRequest) error {
+	requestCleanup, ok := c.Restore.(SyncRestoreRequestCleanupRuntime)
+	if !ok {
+		return nil
+	}
+	abortErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
+		return requestCleanup.AbortRestoreRequest(cleanupCtx, request)
+	})
+	resumeErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
+		return requestCleanup.ResumeRestoreRequest(cleanupCtx, request)
+	})
+	return errors.Join(abortErr, resumeErr)
 }
 
 func runRestoreCleanup(parent context.Context, operation func(context.Context) error) error {
