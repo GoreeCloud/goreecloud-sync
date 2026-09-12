@@ -54,9 +54,16 @@ type fakeRestoreRuntime struct {
 	calls []string
 }
 
-func (f *fakeRestoreRuntime) BeginRestore(context.Context, RestoreRequest) (RestoreLease, error) {
+func (f *fakeRestoreRuntime) BeginRestore(_ context.Context, request RestoreRequest) (RestoreLease, error) {
 	f.calls = append(f.calls, "begin")
-	return f.lease, f.beginErr
+	lease := f.lease
+	if lease.AccountID == "" {
+		lease.AccountID = request.AccountID
+	}
+	if lease.OperationID == "" {
+		lease.OperationID = request.OperationID
+	}
+	return lease, f.beginErr
 }
 
 func (f *fakeRestoreRuntime) CommitAndReconcile(context.Context, RestoreLease) error {
