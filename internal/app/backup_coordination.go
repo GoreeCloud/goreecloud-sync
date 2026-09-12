@@ -12,9 +12,9 @@ import (
 var ErrBackupUnavailable = errors.New("backup service unavailable")
 
 const (
-	restoreCleanupTimeout            = 5 * time.Second
-	maxCoordinationIdentifierLength  = 256
-	maxCheckpointReasonLength        = 512
+	restoreCleanupTimeout           = 5 * time.Second
+	maxCoordinationIdentifierLength = 256
+	maxCheckpointReasonLength       = 512
 )
 
 // BackupProtectionState is descriptive evidence supplied by the Backup
