@@ -181,6 +181,9 @@ func TestCheckpointBeforeChangeAcceptsValidBackupReceipt(t *testing.T) {
 	authorizer := &fakeCheckpointAuthorizer{}
 	backup := &fakeCheckpointAuthority{receipt: BackupCheckpointReceipt{
 		CheckpointID: "cp-123",
+		AccountID:    "acct-1",
+		ScopeID:      "browser-state",
+		OperationID:  "migration-2",
 		CreatedAt:    createdAt,
 	}}
 	coordinator := BackupSyncCoordinator{Authorizer: authorizer, Checkpoint: backup}
@@ -197,6 +200,41 @@ func TestCheckpointBeforeChangeAcceptsValidBackupReceipt(t *testing.T) {
 	}
 	if !outcome.BackupAvailable || !outcome.Created || outcome.Receipt.CheckpointID != "cp-123" {
 		t.Fatalf("unexpected checkpoint outcome: %+v", outcome)
+	}
+}
+
+func TestCheckpointBeforeChangeRejectsReceiptForDifferentRequest(t *testing.T) {
+	request := BackupCheckpointRequest{
+		AccountID:   "acct-1",
+		ScopeID:     "browser-state",
+		OperationID: "migration-2",
+		Reason:      "schema migration",
+		Requirement: BackupCheckpointRequired,
+	}
+
+	for name, receipt := range map[string]BackupCheckpointReceipt{
+		"account": {
+			CheckpointID: "cp-123", AccountID: "acct-2", ScopeID: request.ScopeID,
+			OperationID: request.OperationID, CreatedAt: time.Now().UTC(),
+		},
+		"scope": {
+			CheckpointID: "cp-123", AccountID: request.AccountID, ScopeID: "other-scope",
+			OperationID: request.OperationID, CreatedAt: time.Now().UTC(),
+		},
+		"operation": {
+			CheckpointID: "cp-123", AccountID: request.AccountID, ScopeID: request.ScopeID,
+			OperationID: "other-operation", CreatedAt: time.Now().UTC(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			coordinator := BackupSyncCoordinator{
+				Authorizer: &fakeCheckpointAuthorizer{},
+				Checkpoint: &fakeCheckpointAuthority{receipt: receipt},
+			}
+			if _, err := coordinator.CheckpointBeforeChange(context.Background(), request); err == nil {
+				t.Fatal("mismatched Backup checkpoint receipt must fail closed")
+			}
+		})
 	}
 }
 
