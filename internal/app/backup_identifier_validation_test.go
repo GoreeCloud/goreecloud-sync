@@ -22,7 +22,9 @@ func TestCheckpointRequestRejectsAmbiguousIdentifiersAndReason(t *testing.T) {
 		{"trailing scope whitespace", func(r *BackupCheckpointRequest) { r.ScopeID = "browser-state " }},
 		{"operation control character", func(r *BackupCheckpointRequest) { r.OperationID = "migration\n1" }},
 		{"reason control character", func(r *BackupCheckpointRequest) { r.Reason = "schema\tmigration" }},
-		{"oversized operation", func(r *BackupCheckpointRequest) { r.OperationID = strings.Repeat("x", maxCoordinationIdentifierLength+1) }},
+		{"oversized operation", func(r *BackupCheckpointRequest) {
+			r.OperationID = strings.Repeat("x", maxCoordinationIdentifierLength+1)
+		}},
 		{"oversized reason", func(r *BackupCheckpointRequest) { r.Reason = strings.Repeat("x", maxCheckpointReasonLength+1) }},
 	}
 
@@ -39,8 +41,8 @@ func TestCheckpointRequestRejectsAmbiguousIdentifiersAndReason(t *testing.T) {
 
 func TestRestoreRequestRejectsAmbiguousIdentifiers(t *testing.T) {
 	for name, request := range map[string]RestoreRequest{
-		"account whitespace": {AccountID: "acct-1 ", TargetID: "browser-state", OperationID: "restore-1"},
-		"target control": {AccountID: "acct-1", TargetID: "browser\nstate", OperationID: "restore-1"},
+		"account whitespace":  {AccountID: "acct-1 ", TargetID: "browser-state", OperationID: "restore-1"},
+		"target control":      {AccountID: "acct-1", TargetID: "browser\nstate", OperationID: "restore-1"},
 		"operation oversized": {AccountID: "acct-1", TargetID: "browser-state", OperationID: strings.Repeat("x", maxCoordinationIdentifierLength+1)},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -54,8 +56,8 @@ func TestRestoreRequestRejectsAmbiguousIdentifiers(t *testing.T) {
 func TestRestoreLeaseRejectsAmbiguousRuntimeIdentifiers(t *testing.T) {
 	request := RestoreRequest{AccountID: "acct-1", TargetID: "browser-state", OperationID: "restore-1"}
 	for name, lease := range map[string]RestoreLease{
-		"lease whitespace": {LeaseID: " lease-1", TargetID: request.TargetID, StagingID: "stage-1"},
-		"staging control": {LeaseID: "lease-1", TargetID: request.TargetID, StagingID: "stage\n1"},
+		"lease whitespace":  {LeaseID: " lease-1", TargetID: request.TargetID, StagingID: "stage-1"},
+		"staging control":   {LeaseID: "lease-1", TargetID: request.TargetID, StagingID: "stage\n1"},
 		"staging oversized": {LeaseID: "lease-1", TargetID: request.TargetID, StagingID: strings.Repeat("x", maxCoordinationIdentifierLength+1)},
 	} {
 		t.Run(name, func(t *testing.T) {
