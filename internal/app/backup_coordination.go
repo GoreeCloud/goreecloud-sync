@@ -6,11 +6,16 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 )
 
 var ErrBackupUnavailable = errors.New("backup service unavailable")
 
-const restoreCleanupTimeout = 5 * time.Second
+const (
+	restoreCleanupTimeout            = 5 * time.Second
+	maxCoordinationIdentifierLength  = 256
+	maxCheckpointReasonLength        = 512
+)
 
 // BackupProtectionState is descriptive evidence supplied by the Backup
 // authority. Sync may present or use this state for orchestration decisions, but
@@ -120,11 +125,11 @@ type BackupSyncCoordinator struct {
 // non-future observation time so Sync cannot present undated or future-dated
 // Backup state as current evidence.
 func (c BackupSyncCoordinator) ProtectionState(ctx context.Context, accountID, scopeID string) (BackupProtectionState, error) {
-	if strings.TrimSpace(accountID) == "" {
-		return BackupProtectionState{}, fmt.Errorf("account ID must not be empty")
+	if err := validateCoordinationIdentifier(accountID, "account ID"); err != nil {
+		return BackupProtectionState{}, err
 	}
-	if strings.TrimSpace(scopeID) == "" {
-		return BackupProtectionState{}, fmt.Errorf("scope ID must not be empty")
+	if err := validateCoordinationIdentifier(scopeID, "scope ID"); err != nil {
+		return BackupProtectionState{}, err
 	}
 	if c.Protection == nil {
 		return BackupProtectionState{Available: false, Detail: "backup protection state provider is not configured"}, nil
@@ -255,18 +260,44 @@ func runRestoreCleanup(parent context.Context, operation func(context.Context) e
 	return operation(cleanupCtx)
 }
 
+func validateCoordinationIdentifier(value, field string) error {
+	if value == "" || strings.TrimSpace(value) != value {
+		return fmt.Errorf("%s must be a non-empty canonical identifier", field)
+	}
+	if len(value) > maxCoordinationIdentifierLength {
+		return fmt.Errorf("%s exceeds %d characters", field, maxCoordinationIdentifierLength)
+	}
+	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
+		return fmt.Errorf("%s contains control characters", field)
+	}
+	return nil
+}
+
+func validateCheckpointReason(value string) error {
+	if value == "" || strings.TrimSpace(value) != value {
+		return fmt.Errorf("checkpoint reason must be non-empty and canonical")
+	}
+	if len(value) > maxCheckpointReasonLength {
+		return fmt.Errorf("checkpoint reason exceeds %d characters", maxCheckpointReasonLength)
+	}
+	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
+		return fmt.Errorf("checkpoint reason contains control characters")
+	}
+	return nil
+}
+
 func validateBackupCheckpointRequest(request BackupCheckpointRequest) error {
-	if strings.TrimSpace(request.AccountID) == "" {
-		return fmt.Errorf("account ID must not be empty")
+	if err := validateCoordinationIdentifier(request.AccountID, "account ID"); err != nil {
+		return err
 	}
-	if strings.TrimSpace(request.ScopeID) == "" {
-		return fmt.Errorf("scope ID must not be empty")
+	if err := validateCoordinationIdentifier(request.ScopeID, "scope ID"); err != nil {
+		return err
 	}
-	if strings.TrimSpace(request.OperationID) == "" {
-		return fmt.Errorf("operation ID must not be empty")
+	if err := validateCoordinationIdentifier(request.OperationID, "operation ID"); err != nil {
+		return err
 	}
-	if strings.TrimSpace(request.Reason) == "" {
-		return fmt.Errorf("checkpoint reason must not be empty")
+	if err := validateCheckpointReason(request.Reason); err != nil {
+		return err
 	}
 	if request.Requirement != BackupCheckpointBestEffort && request.Requirement != BackupCheckpointRequired {
 		return fmt.Errorf("invalid backup checkpoint requirement")
@@ -275,7 +306,10 @@ func validateBackupCheckpointRequest(request BackupCheckpointRequest) error {
 }
 
 func validateBackupCheckpointReceipt(request BackupCheckpointRequest, receipt BackupCheckpointReceipt) error {
-	if strings.TrimSpace(receipt.CheckpointID) == "" || receipt.CreatedAt.IsZero() {
+	if err := validateCoordinationIdentifier(receipt.CheckpointID, "checkpoint ID"); err != nil {
+		return fmt.Errorf("backup returned an invalid checkpoint receipt: %w", err)
+	}
+	if receipt.CreatedAt.IsZero() {
 		return fmt.Errorf("backup returned an invalid checkpoint receipt")
 	}
 	if receipt.CreatedAt.After(time.Now().UTC()) {
@@ -294,27 +328,27 @@ func validateBackupCheckpointReceipt(request BackupCheckpointRequest, receipt Ba
 }
 
 func validateRestoreRequest(request RestoreRequest) error {
-	if strings.TrimSpace(request.AccountID) == "" {
-		return fmt.Errorf("account ID must not be empty")
+	if err := validateCoordinationIdentifier(request.AccountID, "account ID"); err != nil {
+		return err
 	}
-	if strings.TrimSpace(request.TargetID) == "" {
-		return fmt.Errorf("restore target ID must not be empty")
+	if err := validateCoordinationIdentifier(request.TargetID, "restore target ID"); err != nil {
+		return err
 	}
-	if strings.TrimSpace(request.OperationID) == "" {
-		return fmt.Errorf("operation ID must not be empty")
+	if err := validateCoordinationIdentifier(request.OperationID, "operation ID"); err != nil {
+		return err
 	}
 	return nil
 }
 
 func validateRestoreLease(request RestoreRequest, lease RestoreLease) error {
-	if strings.TrimSpace(lease.LeaseID) == "" {
-		return fmt.Errorf("sync restore runtime returned an empty lease ID")
+	if err := validateCoordinationIdentifier(lease.LeaseID, "restore lease ID"); err != nil {
+		return fmt.Errorf("sync restore runtime returned an invalid lease ID: %w", err)
 	}
 	if lease.TargetID != request.TargetID {
 		return fmt.Errorf("sync restore runtime returned a lease for the wrong target")
 	}
-	if strings.TrimSpace(lease.StagingID) == "" {
-		return fmt.Errorf("sync restore runtime returned an empty staging ID")
+	if err := validateCoordinationIdentifier(lease.StagingID, "restore staging ID"); err != nil {
+		return fmt.Errorf("sync restore runtime returned an invalid staging ID: %w", err)
 	}
 	return nil
 }
