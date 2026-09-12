@@ -1,7 +1,7 @@
-schema_version: '0.2'
+schema_version: '0.3'
 
 component:
-  type: application
+  type: platform-system
   id: goreecloud-sync
   product_name: GoreeCloud Sync
   repository: GoreeCloud/goreecloud-sync
@@ -70,7 +70,7 @@ platform_systems:
     evidence:
       - README.md
       - SPECIFICATIONS.md
-    notes: User-facing Sync administration and client surfaces remain pending. Any implemented Browser, Android, Debian, or other GoreeCloud-owned presentation must adopt the current Stable Glaze UI baseline and complete product-specific acceptance before release eligibility.
+    notes: User-facing Sync administration and client surfaces remain pending. Any implemented Browser, Android, Debian, or other GoreeCloud-owned presentation must adopt the current Stable Glaze UI 1.3.0 baseline and complete product-specific acceptance before release eligibility.
   mesh:
     result: applicable-blocked
     version: null
@@ -89,6 +89,14 @@ platform_systems:
       - README.md
       - SPECIFICATIONS.md
     notes: Device identities, pairing proofs, account-scoped trusted-device state, secure-peer composition, and explicit revalidation exist as Sync-local Development foundations, but accepted GoreeCloud Identity account/session/authorization integration and production runtime evidence remain incomplete.
+  sync:
+    result: not-applicable-justified
+    version: unreleased-development
+    evidence:
+      - README.md
+      - SPECIFICATIONS.md
+      - docs/architecture.md
+    notes: This repository implements the GoreeCloud Sync synchronization, state-coordination, reconciliation, and cross-device continuity authority itself; a separate Sync-to-Sync Platform System integration is not applicable.
 
 health:
   health_endpoint: /healthz
@@ -119,11 +127,11 @@ continuity:
 external_dependencies: []
 
 compatibility:
-  platform_contract: '0.2'
-  glaze_ui_required: '1.1.0'
+  platform_contract: '0.3'
+  glaze_ui_required: '1.3.0'
   requires:
-    - goreecloud-platform-contract==0.2
-    - glaze-ui==1.1.0
+    - goreecloud-platform-contract==0.3
+    - glaze-ui==1.3.0
   provides:
     - sync-api-v1
     - sync-record-contract-v1
@@ -141,11 +149,12 @@ conformance:
     - docs/architecture.md
     - docs/security-model.md
   blockers:
+    - GoreeCloud Sync is now an adopted Integral Platform System but remains in Development and is not production or Stable accepted.
     - GoreeCloud Manager operational integration, accepted readiness, monitoring, and production observability are incomplete.
     - Producer-authoritative Privacy Shield runtime decisions, user controls, and production privacy acceptance are incomplete.
     - Producer-authoritative Wardveil Security runtime evidence and production security acceptance are incomplete.
     - Everkeep backup, restore, recovery, migration, rollback, and accepted Sync-owned continuity scope are incomplete; synchronization itself must not be treated as backup.
-    - No user-facing current-Stable Glaze UI administration or client surface has completed source, rendered, accessibility, form-factor, or production acceptance.
+    - No user-facing current-Stable Glaze UI 1.3.0 administration or client surface has completed source, rendered, accessibility, form-factor, or production acceptance.
     - GoreeCloud Mesh registration, discovery, dependency/event coordination, transport, and runtime acceptance are incomplete.
     - GoreeCloud Identity account, session, authorization, device-recovery, and production runtime integration are incomplete.
     - Secure peer admission and authenticated one-to-one payload source primitives are not enabled as an approved production runtime with discovery/address policy, listener/dial orchestration, continuous lifecycle handling, production revalidation scheduling, or revocation-aware reconnect behavior.
