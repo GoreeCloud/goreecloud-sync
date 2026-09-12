@@ -15,6 +15,7 @@ const (
 	restoreCleanupTimeout           = 5 * time.Second
 	maxCoordinationIdentifierLength = 256
 	maxCheckpointReasonLength       = 512
+	maxProtectionDetailLength       = 1000
 )
 
 // BackupProtectionState is descriptive evidence supplied by the Backup
@@ -135,8 +136,8 @@ type BackupSyncCoordinator struct {
 // ProtectionState returns Backup's independent protection state. Backup
 // unavailability is represented explicitly rather than being mistaken for an
 // unprotected or protected state. Available evidence must carry a real,
-// non-future observation time so Sync cannot present undated or future-dated
-// Backup state as current evidence.
+// non-future observation time; provider-supplied detail and checkpoint identity
+// are also bounded/canonical before Sync exposes them.
 func (c BackupSyncCoordinator) ProtectionState(ctx context.Context, accountID, scopeID string) (BackupProtectionState, error) {
 	if err := validateCoordinationIdentifier(accountID, "account ID"); err != nil {
 		return BackupProtectionState{}, err
@@ -150,16 +151,24 @@ func (c BackupSyncCoordinator) ProtectionState(ctx context.Context, accountID, s
 
 	state, err := c.Protection.ProtectionState(ctx, accountID, scopeID)
 	if errors.Is(err, ErrBackupUnavailable) {
-		return BackupProtectionState{Available: false, Detail: err.Error()}, nil
+		return BackupProtectionState{Available: false, Detail: ErrBackupUnavailable.Error()}, nil
 	}
 	if err != nil {
 		return BackupProtectionState{}, err
+	}
+	if err := validateOptionalProviderText(state.Detail, "backup protection detail", maxProtectionDetailLength); err != nil {
+		return BackupProtectionState{}, fmt.Errorf("backup returned invalid protection state: %w", err)
 	}
 	if !state.Available {
 		state.Protected = false
 		state.LatestCheckpoint = ""
 		state.ObservedAt = time.Time{}
 		return state, nil
+	}
+	if state.LatestCheckpoint != "" {
+		if err := validateCoordinationIdentifier(state.LatestCheckpoint, "latest checkpoint ID"); err != nil {
+			return BackupProtectionState{}, fmt.Errorf("backup returned invalid protection state: %w", err)
+		}
 	}
 	if state.ObservedAt.IsZero() {
 		return BackupProtectionState{}, fmt.Errorf("available backup protection state is missing observed time")
@@ -199,7 +208,7 @@ func (c BackupSyncCoordinator) CheckpointBeforeChange(ctx context.Context, reque
 		if request.Requirement == BackupCheckpointRequired {
 			return BackupCheckpointOutcome{}, fmt.Errorf("required backup checkpoint: %w", err)
 		}
-		return BackupCheckpointOutcome{BackupAvailable: false, Detail: err.Error()}, nil
+		return BackupCheckpointOutcome{BackupAvailable: false, Detail: ErrBackupUnavailable.Error()}, nil
 	}
 	if err != nil {
 		return BackupCheckpointOutcome{}, err
@@ -290,6 +299,22 @@ func validateCoordinationIdentifier(value, field string) error {
 	}
 	if len(value) > maxCoordinationIdentifierLength {
 		return fmt.Errorf("%s exceeds %d characters", field, maxCoordinationIdentifierLength)
+	}
+	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
+		return fmt.Errorf("%s contains control characters", field)
+	}
+	return nil
+}
+
+func validateOptionalProviderText(value, field string, maximum int) error {
+	if value == "" {
+		return nil
+	}
+	if strings.TrimSpace(value) != value {
+		return fmt.Errorf("%s must be canonical", field)
+	}
+	if len(value) > maximum {
+		return fmt.Errorf("%s exceeds %d characters", field, maximum)
 	}
 	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
 		return fmt.Errorf("%s contains control characters", field)
