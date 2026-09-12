@@ -207,12 +207,11 @@ func (c BackupSyncCoordinator) CheckpointBeforeChange(ctx context.Context, reque
 // RestoreIntoManagedTarget coordinates a restore into an already-authorized
 // Sync-managed logical target. Restore bytes are written only through an opaque
 // staging identifier issued by the Sync runtime. Publication happens only after
-// successful staging and Sync-owned reconciliation. Once a request-matching
-// lease has begun, abort and resume cleanup each receive their own bounded
-// cleanup context that survives cancellation of the caller's request context.
-// A lease whose account, target, or operation does not match the request is
-// never passed back into cleanup methods because doing so could act on authority
-// outside the request that this coordinator was authorized to manage.
+// successful staging and Sync-owned reconciliation. Once a lease has begun,
+// abort and resume cleanup each receive their own bounded cleanup context that
+// survives cancellation of the caller's request context. If the runtime returns
+// a lease bound to a different account, target, or operation, cleanup receives
+// only a request-bound lease shell with no foreign lease/staging identifiers.
 func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, request RestoreRequest, restore func(context.Context, RestoreLease) error) (err error) {
 	if err := validateRestoreRequest(request); err != nil {
 		return err
@@ -229,14 +228,19 @@ func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, req
 		return err
 	}
 	if err := validateRestoreLease(request, lease); err != nil {
+		cleanupLease := lease
 		if !restoreLeaseIdentityMatchesRequest(request, lease) {
-			return fmt.Errorf("sync restore runtime returned a lease outside request authority; refusing unsafe cleanup: %w", err)
+			cleanupLease = RestoreLease{
+				AccountID:   request.AccountID,
+				TargetID:    request.TargetID,
+				OperationID: request.OperationID,
+			}
 		}
 		abortErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
-			return c.Restore.AbortRestore(cleanupCtx, lease)
+			return c.Restore.AbortRestore(cleanupCtx, cleanupLease)
 		})
 		resumeErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
-			return c.Restore.Resume(cleanupCtx, lease)
+			return c.Restore.Resume(cleanupCtx, cleanupLease)
 		})
 		return errors.Join(err, abortErr, resumeErr)
 	}
