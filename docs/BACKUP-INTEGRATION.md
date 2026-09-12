@@ -57,15 +57,17 @@ The Sync runtime must first:
 1. authorize the logical target;
 2. enter the required pause/maintenance state;
 3. create an isolated staging area;
-4. return an opaque restore lease bound to the exact target.
+4. return an opaque restore lease bound to the exact account, target, and operation.
 
-The restore callback receives only that opaque lease/staging identifier. A lease for a different target fails closed before restore execution.
+The restore callback receives only that opaque lease/staging identifier. A lease for a different account, target, or operation, or a malformed lease/staging identifier, fails closed before restore execution.
 
 After staging succeeds, Sync performs `CommitAndReconcile`. Publication/reconciliation is therefore a Sync-owned operation rather than a side effect of Backup writing directly into active Sync storage.
 
-If staging or reconciliation fails, Sync requests abort cleanup. Resume is attempted for every successfully begun lease, including failure paths.
+If staging or reconciliation fails after a **valid** lease has been accepted, Sync requests lease-scoped abort cleanup. Resume is attempted for every successfully accepted lease, including failure paths.
 
-Once a restore lease has begun, cancellation of the original request context does not by itself suppress Sync-owned cleanup. `AbortRestore` and `Resume` each receive a fresh cleanup context that preserves parent context values while detaching cancellation/deadline propagation and imposing a separate current Development ceiling of five seconds per cleanup operation. This is bounded in-process cleanup only; it does not provide crash/restart lease recovery, durable cleanup journaling, or a guarantee that a runtime implementation will successfully finish cleanup.
+If `BeginRestore` returns an **invalid** lease, the coordinator never feeds that untrusted lease—or a fabricated replacement lease—into `AbortRestore` or `Resume`. A runtime may instead implement the optional `SyncRestoreRequestCleanupRuntime` interface, whose `AbortRestoreRequest` and `ResumeRestoreRequest` methods receive only the exact already-validated `RestoreRequest`. This gives the runtime a bounded way to unwind partial begin/pause state without granting authority to identifiers returned in an invalid lease. If that request-bound cleanup interface is unavailable, the coordinator fails closed without invoking lease-scoped cleanup on the invalid lease.
+
+Once cleanup is needed, cancellation of the original request context does not by itself suppress Sync-owned cleanup. Cleanup operations receive a fresh context that preserves parent context values while detaching cancellation/deadline propagation and imposing a separate current Development ceiling of five seconds per cleanup operation. This is bounded in-process cleanup only; it does not provide crash/restart lease recovery, durable cleanup journaling, or a guarantee that a runtime implementation will successfully finish cleanup.
 
 ## Graceful unavailability
 
@@ -74,7 +76,8 @@ The contract distinguishes service absence from successful protection or success
 - missing/unavailable Backup protection provider → explicit unavailable state;
 - unavailable Backup checkpoint authority → required checkpoints fail closed, best-effort checkpoints degrade explicitly;
 - missing Sync restore runtime → restore cannot begin;
-- failed Sync begin/pause/staging setup → restore callback does not run.
+- failed Sync begin/pause/staging setup → restore callback does not run;
+- invalid runtime lease → restore callback does not run and only request-bound cleanup may be used.
 
 No component may convert an unavailable dependency into optimistic success.
 
@@ -95,6 +98,6 @@ Before this relationship can be described as production-ready, GoreeCloud still 
 - real Backup protection/checkpoint implementation wiring;
 - real Sync pause/maintenance/staging/reconciliation runtime wiring;
 - restore conflict and rollback policy for each supported Sync-managed dataset;
-- crash/restart recovery and durable reconciliation for interrupted restore leases beyond the bounded in-process cancellation cleanup implemented here;
+- crash/restart recovery and durable reconciliation for interrupted restore leases beyond the bounded in-process cleanup implemented here;
 - operational observability without sensitive payload leakage;
 - target-environment tests, failure injection, recovery drills, and production acceptance evidence.
