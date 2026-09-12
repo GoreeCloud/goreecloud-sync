@@ -112,6 +112,16 @@ type SyncRestoreRuntime interface {
 	Resume(ctx context.Context, lease RestoreLease) error
 }
 
+// SyncRestoreRequestCleanupRuntime is the fail-closed cleanup boundary used when
+// BeginRestore returned an invalid lease. The coordinator must not feed a
+// foreign or malformed lease back into lease-scoped cleanup operations. A runtime
+// that can safely unwind a partially begun restore without trusting the returned
+// lease may implement these exact request-bound methods.
+type SyncRestoreRequestCleanupRuntime interface {
+	AbortRestoreRequest(ctx context.Context, request RestoreRequest) error
+	ResumeRestoreRequest(ctx context.Context, request RestoreRequest) error
+}
+
 // BackupSyncCoordinator composes Backup-owned protection/checkpoint authority
 // with Sync-owned restore orchestration without transferring authority between
 // the two services.
@@ -207,11 +217,11 @@ func (c BackupSyncCoordinator) CheckpointBeforeChange(ctx context.Context, reque
 // RestoreIntoManagedTarget coordinates a restore into an already-authorized
 // Sync-managed logical target. Restore bytes are written only through an opaque
 // staging identifier issued by the Sync runtime. Publication happens only after
-// successful staging and Sync-owned reconciliation. Once a lease has begun,
+// successful staging and Sync-owned reconciliation. Once a valid lease has begun,
 // abort and resume cleanup each receive their own bounded cleanup context that
-// survives cancellation of the caller's request context. If the runtime returns
-// a lease bound to a different account, target, or operation, cleanup receives
-// only a request-bound lease shell with no foreign lease/staging identifiers.
+// survives cancellation of the caller's request context. If BeginRestore returns
+// an invalid lease, lease-scoped cleanup is never called with that untrusted lease;
+// only an optional request-bound cleanup interface may unwind the request.
 func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, request RestoreRequest, restore func(context.Context, RestoreLease) error) (err error) {
 	if err := validateRestoreRequest(request); err != nil {
 		return err
@@ -228,19 +238,15 @@ func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, req
 		return err
 	}
 	if err := validateRestoreLease(request, lease); err != nil {
-		cleanupLease := lease
-		if !restoreLeaseIdentityMatchesRequest(request, lease) {
-			cleanupLease = RestoreLease{
-				AccountID:   request.AccountID,
-				TargetID:    request.TargetID,
-				OperationID: request.OperationID,
-			}
+		requestCleanup, ok := c.Restore.(SyncRestoreRequestCleanupRuntime)
+		if !ok {
+			return err
 		}
 		abortErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
-			return c.Restore.AbortRestore(cleanupCtx, cleanupLease)
+			return requestCleanup.AbortRestoreRequest(cleanupCtx, request)
 		})
 		resumeErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
-			return c.Restore.Resume(cleanupCtx, cleanupLease)
+			return requestCleanup.ResumeRestoreRequest(cleanupCtx, request)
 		})
 		return errors.Join(err, abortErr, resumeErr)
 	}
@@ -265,12 +271,6 @@ func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, req
 		return errors.Join(err, abortErr)
 	}
 	return nil
-}
-
-func restoreLeaseIdentityMatchesRequest(request RestoreRequest, lease RestoreLease) bool {
-	return lease.AccountID == request.AccountID &&
-		lease.TargetID == request.TargetID &&
-		lease.OperationID == request.OperationID
 }
 
 func runRestoreCleanup(parent context.Context, operation func(context.Context) error) error {
