@@ -207,9 +207,12 @@ func (c BackupSyncCoordinator) CheckpointBeforeChange(ctx context.Context, reque
 // RestoreIntoManagedTarget coordinates a restore into an already-authorized
 // Sync-managed logical target. Restore bytes are written only through an opaque
 // staging identifier issued by the Sync runtime. Publication happens only after
-// successful staging and Sync-owned reconciliation. Once a lease has begun,
-// abort and resume cleanup each receive their own bounded cleanup context that
-// survives cancellation of the caller's request context.
+// successful staging and Sync-owned reconciliation. Once a request-matching
+// lease has begun, abort and resume cleanup each receive their own bounded
+// cleanup context that survives cancellation of the caller's request context.
+// A lease whose account, target, or operation does not match the request is
+// never passed back into cleanup methods because doing so could act on authority
+// outside the request that this coordinator was authorized to manage.
 func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, request RestoreRequest, restore func(context.Context, RestoreLease) error) (err error) {
 	if err := validateRestoreRequest(request); err != nil {
 		return err
@@ -226,6 +229,9 @@ func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, req
 		return err
 	}
 	if err := validateRestoreLease(request, lease); err != nil {
+		if !restoreLeaseIdentityMatchesRequest(request, lease) {
+			return fmt.Errorf("sync restore runtime returned a lease outside request authority; refusing unsafe cleanup: %w", err)
+		}
 		abortErr := runRestoreCleanup(ctx, func(cleanupCtx context.Context) error {
 			return c.Restore.AbortRestore(cleanupCtx, lease)
 		})
@@ -255,6 +261,12 @@ func (c BackupSyncCoordinator) RestoreIntoManagedTarget(ctx context.Context, req
 		return errors.Join(err, abortErr)
 	}
 	return nil
+}
+
+func restoreLeaseIdentityMatchesRequest(request RestoreRequest, lease RestoreLease) bool {
+	return lease.AccountID == request.AccountID &&
+		lease.TargetID == request.TargetID &&
+		lease.OperationID == request.OperationID
 }
 
 func runRestoreCleanup(parent context.Context, operation func(context.Context) error) error {
