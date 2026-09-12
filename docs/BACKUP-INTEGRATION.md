@@ -65,7 +65,7 @@ After staging succeeds, Sync performs `CommitAndReconcile`. Publication/reconcil
 
 If staging or reconciliation fails after a **valid** lease has been accepted, Sync requests lease-scoped abort cleanup. Resume is attempted for every successfully accepted lease, including failure paths.
 
-If `BeginRestore` returns an **invalid** lease, the coordinator never feeds that untrusted lease—or a fabricated replacement lease—into `AbortRestore` or `Resume`. A runtime may instead implement the optional `SyncRestoreRequestCleanupRuntime` interface, whose `AbortRestoreRequest` and `ResumeRestoreRequest` methods receive only the exact already-validated `RestoreRequest`. This gives the runtime a bounded way to unwind partial begin/pause state without granting authority to identifiers returned in an invalid lease. If that request-bound cleanup interface is unavailable, the coordinator fails closed without invoking lease-scoped cleanup on the invalid lease.
+If `BeginRestore` returns an **error after partially entering restore state**, or returns an **invalid lease**, the coordinator never feeds any returned lease—or a fabricated replacement lease—into `AbortRestore` or `Resume`. A runtime may instead implement the optional `SyncRestoreRequestCleanupRuntime` interface, whose `AbortRestoreRequest` and `ResumeRestoreRequest` methods receive only the exact already-validated `RestoreRequest`. This gives the runtime a bounded way to unwind partial begin/pause state without granting authority to identifiers returned alongside an error or in an invalid lease. If that request-bound cleanup interface is unavailable, the coordinator fails closed without invoking lease-scoped cleanup on untrusted lease material.
 
 Once cleanup is needed, cancellation of the original request context does not by itself suppress Sync-owned cleanup. Cleanup operations receive a fresh context that preserves parent context values while detaching cancellation/deadline propagation and imposing a separate current Development ceiling of five seconds per cleanup operation. This is bounded in-process cleanup only; it does not provide crash/restart lease recovery, durable cleanup journaling, or a guarantee that a runtime implementation will successfully finish cleanup.
 
@@ -76,7 +76,7 @@ The contract distinguishes service absence from successful protection or success
 - missing/unavailable Backup protection provider → explicit unavailable state;
 - unavailable Backup checkpoint authority → required checkpoints fail closed, best-effort checkpoints degrade explicitly;
 - missing Sync restore runtime → restore cannot begin;
-- failed Sync begin/pause/staging setup → restore callback does not run;
+- failed Sync begin/pause/staging setup → restore callback does not run and only request-bound cleanup may be used if the runtime supports it;
 - invalid runtime lease → restore callback does not run and only request-bound cleanup may be used.
 
 No component may convert an unavailable dependency into optimistic success.
