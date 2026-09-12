@@ -47,8 +47,14 @@ type BackupCheckpointRequest struct {
 	Requirement BackupCheckpointRequirement
 }
 
+// BackupCheckpointReceipt binds Backup's result to the exact authorized request
+// so a receipt for another account, scope, or operation cannot be replayed as
+// evidence for this checkpoint request.
 type BackupCheckpointReceipt struct {
 	CheckpointID string
+	AccountID    string
+	ScopeID      string
+	OperationID  string
 	CreatedAt    time.Time
 }
 
@@ -170,8 +176,8 @@ func (c BackupSyncCoordinator) CheckpointBeforeChange(ctx context.Context, reque
 	if err != nil {
 		return BackupCheckpointOutcome{}, err
 	}
-	if strings.TrimSpace(receipt.CheckpointID) == "" || receipt.CreatedAt.IsZero() {
-		return BackupCheckpointOutcome{}, fmt.Errorf("backup returned an invalid checkpoint receipt")
+	if err := validateBackupCheckpointReceipt(request, receipt); err != nil {
+		return BackupCheckpointOutcome{}, err
 	}
 	return BackupCheckpointOutcome{
 		BackupAvailable: true,
@@ -254,6 +260,22 @@ func validateBackupCheckpointRequest(request BackupCheckpointRequest) error {
 	}
 	if request.Requirement != BackupCheckpointBestEffort && request.Requirement != BackupCheckpointRequired {
 		return fmt.Errorf("invalid backup checkpoint requirement")
+	}
+	return nil
+}
+
+func validateBackupCheckpointReceipt(request BackupCheckpointRequest, receipt BackupCheckpointReceipt) error {
+	if strings.TrimSpace(receipt.CheckpointID) == "" || receipt.CreatedAt.IsZero() {
+		return fmt.Errorf("backup returned an invalid checkpoint receipt")
+	}
+	if receipt.AccountID != request.AccountID {
+		return fmt.Errorf("backup checkpoint receipt account does not match the authorized request")
+	}
+	if receipt.ScopeID != request.ScopeID {
+		return fmt.Errorf("backup checkpoint receipt scope does not match the authorized request")
+	}
+	if receipt.OperationID != request.OperationID {
+		return fmt.Errorf("backup checkpoint receipt operation does not match the authorized request")
 	}
 	return nil
 }
