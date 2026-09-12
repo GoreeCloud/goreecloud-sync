@@ -90,13 +90,16 @@ type RestoreRequest struct {
 	OperationID string
 }
 
-// RestoreLease is issued by the Sync runtime after it has authorized the target,
-// paused mutations for that target, and created an isolated staging area. The
-// staging identifier is opaque; callers do not get destination-path authority.
+// RestoreLease is issued by the Sync runtime after it has authorized the exact
+// account, target, and operation, paused mutations for that target, and created
+// an isolated staging area. The staging identifier is opaque; callers do not get
+// destination-path authority.
 type RestoreLease struct {
-	LeaseID   string
-	TargetID  string
-	StagingID string
+	LeaseID     string
+	AccountID   string
+	TargetID    string
+	OperationID string
+	StagingID   string
 }
 
 // SyncRestoreRuntime owns the Sync-side restore lifecycle for Sync-managed
@@ -344,8 +347,14 @@ func validateRestoreLease(request RestoreRequest, lease RestoreLease) error {
 	if err := validateCoordinationIdentifier(lease.LeaseID, "restore lease ID"); err != nil {
 		return fmt.Errorf("sync restore runtime returned an invalid lease ID: %w", err)
 	}
+	if lease.AccountID != request.AccountID {
+		return fmt.Errorf("sync restore runtime returned a lease for the wrong account")
+	}
 	if lease.TargetID != request.TargetID {
 		return fmt.Errorf("sync restore runtime returned a lease for the wrong target")
+	}
+	if lease.OperationID != request.OperationID {
+		return fmt.Errorf("sync restore runtime returned a lease for the wrong operation")
 	}
 	if err := validateCoordinationIdentifier(lease.StagingID, "restore staging ID"); err != nil {
 		return fmt.Errorf("sync restore runtime returned an invalid staging ID: %w", err)
